@@ -16,6 +16,7 @@ const state = {
   routingResults: [],
   routeOptionCatalog: initialOptionCatalog,
   showFilters: false,
+  filterSearch: "",
   showPlanner: false,
   favoriteRouteOptionIds: new Set(["route-opt-Student Recreation Center-mixed"]),
   favoriteRoutes: new Set(["r1", "r5"]),
@@ -362,7 +363,7 @@ function renderHomeSheet() {
       </label>
       <button class="filter-button" data-toggle-filters>☰</button>
     </div>
-    ${renderFilterTray()}
+    ${renderFilterModal()}
     <section class="bottom-sheet ${state.sheetState === 0 ? "is-hidden" : ""}" data-sheet>
       <div class="sheet-handle" data-sheet-handle></div>
       <div class="sheet-content">
@@ -645,16 +646,54 @@ function renderAlertsPage() {
   `;
 }
 
-function renderFilterTray() {
+function renderFilterModal() {
+  if (!state.showFilters) return "";
+
+  const query = state.filterSearch.toLowerCase();
+  const visibleCount = Object.values(state.routeVisibility).filter(Boolean).length;
+  const filtered = ROUTES.filter(
+    (route) =>
+      route.name.toLowerCase().includes(query) ||
+      route.shortName.toLowerCase().includes(query)
+  );
+
   return `
-    <div class="filter-tray ${state.showFilters ? "is-open" : ""}">
-      ${ROUTES.map(
-        (route) => `
-          <button class="filter-chip ${state.routeVisibility[route.id] ? "is-on" : "is-off"}" data-toggle-route="${route.id}" style="--route:${route.color};">
-            <span class="dot"></span>${route.shortName}
-          </button>
-        `
-      ).join("")}
+    <div class="filter-backdrop" data-close-filters></div>
+    <div class="filter-modal" role="dialog" aria-modal="true" aria-label="Filter routes">
+      <div class="filter-modal-header">
+        <span class="filter-modal-title">Filter Routes</span>
+        <div class="filter-modal-actions">
+          <button class="filter-action-link" data-filter-all>All</button>
+          <button class="filter-action-link" data-filter-none>None</button>
+          <button class="filter-modal-close" data-close-filters aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="filter-search-wrap">
+        <input
+          id="filter-search-input"
+          class="filter-search-input"
+          placeholder="Search routes…"
+          value="${state.filterSearch}"
+          autocomplete="off"
+        />
+      </div>
+      <div class="filter-route-list">
+        ${filtered.length ? filtered.map((route) => {
+          const on = state.routeVisibility[route.id];
+          return `
+            <label class="filter-route-row" style="--route:${route.color};">
+              <input type="checkbox" class="filter-checkbox" data-toggle-route="${route.id}" ${on ? "checked" : ""} />
+              <span class="filter-route-badge">${route.shortName}</span>
+              <span class="filter-route-name">${route.name}</span>
+              <span class="filter-route-meta">${route.stops.length} stops · ${route.durationLabel}</span>
+            </label>
+          `;
+        }).join("") : `<div class="filter-empty">No routes match "<em>${state.filterSearch}</em>"</div>`}
+      </div>
+      <div class="filter-modal-footer">
+        <span class="filter-count">${visibleCount} of ${ROUTES.length} shown</span>
+        <button class="filter-done-button" data-close-filters>Done</button>
+      </div>
     </div>
   `;
 }
@@ -787,18 +826,84 @@ function bindEvents() {
     });
   });
 
-  document.querySelectorAll("[data-toggle-route]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const routeId = button.dataset.toggleRoute;
-      state.routeVisibility[routeId] = !state.routeVisibility[routeId];
-      render();
+  document.querySelectorAll("[data-toggle-route]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const routeId = checkbox.dataset.toggleRoute;
+      state.routeVisibility[routeId] = checkbox.checked;
+      // Update the visible count in the footer without full re-render
+      const countEl = document.querySelector(".filter-count");
+      if (countEl) {
+        const visibleCount = Object.values(state.routeVisibility).filter(Boolean).length;
+        countEl.textContent = `${visibleCount} of ${ROUTES.length} shown`;
+      }
     });
   });
 
   document.querySelector("[data-toggle-filters]")?.addEventListener("click", () => {
     state.showFilters = !state.showFilters;
+    state.filterSearch = "";
     render();
   });
+
+  document.querySelectorAll("[data-close-filters]").forEach((el) => {
+    el.addEventListener("click", () => {
+      state.showFilters = false;
+      state.filterSearch = "";
+      render();
+    });
+  });
+
+  document.querySelector("[data-filter-all]")?.addEventListener("click", () => {
+    ROUTES.forEach((route) => { state.routeVisibility[route.id] = true; });
+    render();
+  });
+
+  document.querySelector("[data-filter-none]")?.addEventListener("click", () => {
+    ROUTES.forEach((route) => { state.routeVisibility[route.id] = false; });
+    render();
+  });
+
+  const filterSearchInput = document.querySelector("#filter-search-input");
+  if (filterSearchInput) {
+    filterSearchInput.focus();
+    filterSearchInput.addEventListener("input", (event) => {
+      state.filterSearch = event.target.value;
+      // Re-render just the route list rows without closing the modal
+      const query = state.filterSearch.toLowerCase();
+      const filtered = ROUTES.filter(
+        (route) =>
+          route.name.toLowerCase().includes(query) ||
+          route.shortName.toLowerCase().includes(query)
+      );
+      const listEl = document.querySelector(".filter-route-list");
+      if (listEl) {
+        listEl.innerHTML = filtered.length
+          ? filtered.map((route) => {
+              const on = state.routeVisibility[route.id];
+              return `
+                <label class="filter-route-row" style="--route:${route.color};">
+                  <input type="checkbox" class="filter-checkbox" data-toggle-route="${route.id}" ${on ? "checked" : ""} />
+                  <span class="filter-route-badge">${route.shortName}</span>
+                  <span class="filter-route-name">${route.name}</span>
+                  <span class="filter-route-meta">${route.stops.length} stops · ${route.durationLabel}</span>
+                </label>
+              `;
+            }).join("")
+          : `<div class="filter-empty">No routes match "<em>${state.filterSearch}</em>"</div>`;
+        // Re-bind checkboxes in the freshly injected rows
+        listEl.querySelectorAll("[data-toggle-route]").forEach((checkbox) => {
+          checkbox.addEventListener("change", () => {
+            state.routeVisibility[checkbox.dataset.toggleRoute] = checkbox.checked;
+            const countEl = document.querySelector(".filter-count");
+            if (countEl) {
+              const visibleCount = Object.values(state.routeVisibility).filter(Boolean).length;
+              countEl.textContent = `${visibleCount} of ${ROUTES.length} shown`;
+            }
+          });
+        });
+      }
+    });
+  }
 
   document.querySelector("[data-sheet-action]")?.addEventListener("click", () => {
     if (state.routingResults.length) {
