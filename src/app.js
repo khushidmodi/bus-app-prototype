@@ -271,7 +271,7 @@ function renderMapLayer() {
       <div class="campus-label label-c">Main Library</div>
       ${visibleRoutes.map((route) => renderRouteLayer(route, highlightedRouteIds)).join("")}
       ${renderUserMarker()}
-      ${state.screen === "routeDetails" ? renderRouteHeroCard(selectedRoute) : ""}
+      ${state.screen === "routeDetails" ? "" : ""}
     </section>
   `;
 }
@@ -482,15 +482,16 @@ function renderRouteDetailsSheet() {
   return `
     <section class="bottom-sheet route-details-sheet details-open ${state.sheetState === 0 ? "is-hidden" : ""}" data-sheet>
       <div class="sheet-handle" data-sheet-handle></div>
-      <div class="sheet-content">
-        <div class="sheet-header">
-          <div>
-            <div class="eyebrow">Route Stops</div>
-            <h2>${route.name}</h2>
-          </div>
-          <div class="eta-pill">${busStopIndex.nextEta} away</div>
+      <div class="sheet-header sheet-header--sticky">
+        <button class="ghost-button" data-back-map>←</button>
+        <div>
+          <div class="eyebrow">Route Stops</div>
+          <h2>${route.name}</h2>
         </div>
-        <p class="status-copy">Bus is currently near ${busStopIndex.currentStop.name}</p>
+        <div class="eta-pill">${busStopIndex.nextEta} away</div>
+      </div>
+      <div class="sheet-content">
+        <p class="status-copy" style="margin-top:0;">Bus is currently near ${busStopIndex.currentStop.name}</p>
         <div class="stop-list">
           ${route.stops
             .map((stop, index) => {
@@ -567,7 +568,7 @@ function renderSavedPage() {
           <div class="page-subtitle">Quick access to favorite trips and bus lines</div>
         </div>
       </div>
-      <div class="saved-grid">
+      <div class="panel-scroll saved-grid">
         ${routeCards
           .map(
             (route) => `
@@ -608,35 +609,37 @@ function renderAlertsPage() {
           <div class="page-subtitle">Create simulated bus arrival alerts</div>
         </div>
       </div>
-      <div class="alert-form">
-        <label>
-          <span>Route</span>
-          <select data-alert-route>
-            ${ROUTES.map((route) => `<option value="${route.id}" ${route.id === selectedRoute.id ? "selected" : ""}>${route.name}</option>`).join("")}
-          </select>
-        </label>
-        <label>
-          <span>Stop</span>
-          <select data-alert-stop>
-            ${stops.map((stop) => `<option value="${stop.id}" ${stop.id === state.alertForm.stopId ? "selected" : ""}>${stop.name}</option>`).join("")}
-          </select>
-        </label>
-        <label>
-          <span>Time range</span>
-          <select data-alert-time>
-            ${["0-5 min", "5-15 min", "15-30 min"].map((value) => `<option value="${value}" ${value === state.alertForm.timeRange ? "selected" : ""}>${value}</option>`).join("")}
-          </select>
-        </label>
-        <fieldset>
-          <legend>Days</legend>
-          <div class="day-row">
-            ${["Mon", "Tue", "Wed", "Thu", "Fri"].map((day) => `<button class="day-pill ${state.alertForm.days.includes(day) ? "is-selected" : ""}" data-day="${day}">${day}</button>`).join("")}
-          </div>
-        </fieldset>
-        <button class="select-route-button" data-create-alert>Create Alert</button>
-      </div>
-      <div class="alert-feed">
-        ${state.alerts.map((alert) => `<div class="alert-card">${alert.message}</div>`).join("")}
+      <div class="panel-scroll">
+        <div class="alert-form">
+          <label>
+            <span>Route</span>
+            <select data-alert-route>
+              ${ROUTES.map((route) => `<option value="${route.id}" ${route.id === selectedRoute.id ? "selected" : ""}>${route.name}</option>`).join("")}
+            </select>
+          </label>
+          <label>
+            <span>Stop</span>
+            <select data-alert-stop>
+              ${stops.map((stop) => `<option value="${stop.id}" ${stop.id === state.alertForm.stopId ? "selected" : ""}>${stop.name}</option>`).join("")}
+            </select>
+          </label>
+          <label>
+            <span>Time range</span>
+            <select data-alert-time>
+              ${["0-5 min", "5-15 min", "15-30 min"].map((value) => `<option value="${value}" ${value === state.alertForm.timeRange ? "selected" : ""}>${value}</option>`).join("")}
+            </select>
+          </label>
+          <fieldset>
+            <legend>Days</legend>
+            <div class="day-row">
+              ${["Mon", "Tue", "Wed", "Thu", "Fri"].map((day) => `<button class="day-pill ${state.alertForm.days.includes(day) ? "is-selected" : ""}" data-day="${day}">${day}</button>`).join("")}
+            </div>
+          </fieldset>
+          <button class="select-route-button" data-create-alert>Create Alert</button>
+        </div>
+        <div class="alert-feed">
+          ${state.alerts.map((alert) => `<div class="alert-card">${alert.message}</div>`).join("")}
+        </div>
       </div>
     </section>
   `;
