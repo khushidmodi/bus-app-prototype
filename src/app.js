@@ -1,4 +1,4 @@
-import { BUILDINGS, ROUTES, TIMETABLES, USER_LOCATION } from "./data.js";
+import { BUILDINGS, BUILDING_LOCATIONS, ROUTES, TIMETABLES, USER_LOCATION } from "./data.js";
 
 const sheetHeights = ["0vh", "16vh", "42vh", "74vh"];
 const initialOptionCatalog = Object.fromEntries(
@@ -89,20 +89,30 @@ function bindSimulation() {
 // leaving the rest of the DOM (inputs, scroll position, sheet) completely untouched.
 function updateMapOnly() {
   const selectedRoute = getSelectedRoute();
-  const highlightedRouteIds = state.selectedRouteOptionId
-    ? getHighlightedRoutesFromOption(state.selectedRouteOptionId)
+  const journey = state.selectedRouteOptionId
+    ? buildJourneyGeometry(getRouteOption(state.selectedRouteOptionId))
+    : null;
+  const highlightedRouteIds = journey
+    ? journey.steps.filter(s => s.type === "bus-segment").map(s => s.route.id)
     : [selectedRoute.id];
 
   ROUTES.forEach((route) => {
     const bus = getBusPosition(route);
     const highlighted = highlightedRouteIds.includes(route.id);
+    const dimmed = journey && !highlighted;
 
-    // Move the bus marker
+    // Move the bus marker (hidden when dimmed)
     const busEl = document.querySelector(`.bus-marker[data-open-route="${route.id}"]`);
     if (busEl) {
       busEl.style.left = `${bus.x}%`;
       busEl.style.top = `${bus.y}%`;
       busEl.classList.toggle("pulse", highlighted);
+    }
+
+    // Dim/undim the route SVG
+    const routeSvg = document.querySelector(`.route-svg[data-route-id="${route.id}"]`);
+    if (routeSvg) {
+      routeSvg.classList.toggle("is-dimmed", !!dimmed);
     }
 
     // Update stop statuses if the route detail sheet is open for this route
@@ -118,13 +128,9 @@ function updateMapOnly() {
       // Update the ETA pill and status copy in the sheet
       const busStopIndex = getCurrentStopIndex(route);
       const etaPill = document.querySelector(".eta-pill");
-      if (etaPill) {
-        etaPill.textContent = `${busStopIndex.nextEta} away`;
-      }
+      if (etaPill) etaPill.textContent = `${busStopIndex.nextEta} away`;
       const statusCopy = document.querySelector(".status-copy");
-      if (statusCopy) {
-        statusCopy.textContent = `Bus is currently near ${busStopIndex.currentStop.name}`;
-      }
+      if (statusCopy) statusCopy.textContent = `Bus is currently near ${busStopIndex.currentStop.name}`;
 
       // Update each stop row's status label and highlight
       const stopRows = document.querySelectorAll(".stop-row");
@@ -134,13 +140,9 @@ function updateMapOnly() {
         const status = getStopStatus(route, index);
         row.classList.toggle("is-bus-location", status.variant === "current");
         const iconEl = row.querySelector(".stop-icon");
-        if (iconEl) {
-          iconEl.className = `stop-icon ${status.variant}`;
-        }
+        if (iconEl) iconEl.className = `stop-icon ${status.variant}`;
         const statusEl = row.querySelector(".stop-status");
-        if (statusEl) {
-          statusEl.textContent = status.label;
-        }
+        if (statusEl) statusEl.textContent = status.label;
       });
     }
   });
@@ -256,56 +258,160 @@ function render() {
   bindEvents();
 }
 
+// ── Journey geometry helpers ──────────────────────────────────
+
+function getBuildingLocation(name) {
+  if (BUILDING_LOCATIONS[name]) return BUILDING_LOCATIONS[name];
+  // Seeded fallback for arbitrary destinations not in the lookup
+  const random = seeded(name);
+  return { x: 15 + Math.floor(random() * 70), y: 15 + Math.floor(random() * 70) };
+}
+
+function dist2d(a, b) {
+  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+}
+
+function nearestStopIndex(route, point) {
+  let best = 0;
+  let bestDist = Infinity;
+  route.stops.forEach((stop, i) => {
+    const d = dist2d(stop, point);
+    if (d < bestDist) { bestDist = d; best = i; }
+  });
+  return best;
+}
+
+// Returns an ordered list of draw steps for the selected option:
+//   { type: "walk",        points: [{x,y}, …] }
+//   { type: "bus-segment", route, stops: [{x,y}, …], color, glow }
+function buildJourneyGeometry(option) {
+  if (!option) return null;
+
+  const destName = option.destination;
+  const destPt   = getBuildingLocation(destName);
+  const steps    = [];
+  let   cursor   = { x: USER_LOCATION.x, y: USER_LOCATION.y };
+
+  for (const seg of option.segments) {
+    if (seg.type === "walk") {
+      // Walk leg: cursor → dest (last segment) or cursor → nearest stop of next bus seg
+      const nextBus = option.segments[option.segments.indexOf(seg) + 1];
+      if (nextBus && nextBus.type === "bus") {
+        const route     = ROUTES.find(r => r.id === nextBus.routeId);
+        const boardIdx  = nearestStopIndex(route, cursor);
+        const boardStop = route.stops[boardIdx];
+        steps.push({ type: "walk", points: [cursor, boardStop] });
+        cursor = boardStop;
+      } else {
+        // Walk-only or final walk leg → destination
+        steps.push({ type: "walk", points: [cursor, destPt] });
+        cursor = destPt;
+      }
+    } else if (seg.type === "bus") {
+      const route      = ROUTES.find(r => r.id === seg.routeId);
+      if (!route) continue;
+      const boardIdx   = nearestStopIndex(route, cursor);
+      const alightIdx  = nearestStopIndex(route, destPt);
+      // Ensure at least one stop travelled; if same, include one extra
+      const lo = Math.min(boardIdx, alightIdx);
+      const hi = Math.max(boardIdx, alightIdx, lo + 1);
+      const ridden = route.stops.slice(lo, hi + 1);
+      steps.push({ type: "bus-segment", route, stops: ridden, color: route.color, glow: route.glow });
+      cursor = ridden[ridden.length - 1];
+
+      // Walk from alighting stop to destination
+      const isLast = option.segments.indexOf(seg) === option.segments.length - 1;
+      if (isLast) {
+        steps.push({ type: "walk", points: [cursor, destPt] });
+      }
+    }
+  }
+
+  return { steps, destPt };
+}
+
 function renderMapLayer() {
   const selectedRoute = getSelectedRoute();
-  const highlightedRouteIds = state.selectedRouteOptionId
-    ? getHighlightedRoutesFromOption(state.selectedRouteOptionId)
-    : [selectedRoute.id];
-  const visibleRoutes =
-    state.screen === "routeDetails"
-      ? ROUTES.filter((route) => route.id === selectedRoute.id)
-      : ROUTES.filter((route) => state.routeVisibility[route.id]);
+  const journey = state.selectedRouteOptionId
+    ? buildJourneyGeometry(getRouteOption(state.selectedRouteOptionId))
+    : null;
+
+  // Which routes to show + which are highlighted
+  let visibleRoutes, highlightedRouteIds;
+
+  if (state.screen === "routeDetails") {
+    visibleRoutes      = ROUTES.filter(r => r.id === selectedRoute.id);
+    highlightedRouteIds = [selectedRoute.id];
+  } else if (journey) {
+    // Only show routes that appear in the journey as bus segments; dim everything else
+    const journeyRouteIds = journey.steps
+      .filter(s => s.type === "bus-segment")
+      .map(s => s.route.id);
+    visibleRoutes       = ROUTES.filter(r => state.routeVisibility[r.id]);
+    highlightedRouteIds = journeyRouteIds;
+  } else {
+    visibleRoutes       = ROUTES.filter(r => state.routeVisibility[r.id]);
+    highlightedRouteIds = [selectedRoute.id];
+  }
 
   return `
     <section class="map-canvas ${state.screen === "map" ? "is-home" : ""}">
       <div class="map-grid"></div>
       <div class="campus-glow campus-glow-a"></div>
       <div class="campus-glow campus-glow-b"></div>
-      <div class="campus-label label-a">Student Recreation Center</div>
+      <!--<div class="campus-label label-a">Student Recreation Center</div>
       <div class="campus-label label-b">Bryant Denny Stadium</div>
-      <div class="campus-label label-c">Main Library</div>
-      ${visibleRoutes.map((route) => renderRouteLayer(route, highlightedRouteIds)).join("")}
+      <div class="campus-label label-c">Main Library</div>-->
+      ${visibleRoutes.map(route => renderRouteLayer(route, highlightedRouteIds, journey)).join("")}
+      ${journey ? renderJourneyOverlay(journey) : ""}
       ${renderUserMarker()}
-      ${state.screen === "routeDetails" ? "" : ""}
     </section>
   `;
 }
 
-function renderRouteLayer(route, highlightedRouteIds) {
+function renderRouteLayer(route, highlightedRouteIds, journey) {
   const highlighted = highlightedRouteIds.includes(route.id);
-  const bus = getBusPosition(route);
+  const dimmed      = journey && !highlighted;
+  const bus         = getBusPosition(route);
+
+  // When a journey is active, only draw the ridden portion of this route
+  const journeyStep = journey?.steps.find(s => s.type === "bus-segment" && s.route.id === route.id);
+  const riddenPoints = journeyStep
+    ? journeyStep.stops.map(s => `${s.x},${s.y}`).join(" ")
+    : null;
+
   return `
-    <div class="route-line ${highlighted ? "is-highlighted" : ""}" style="--route:${route.color}; --glow:${route.glow}; clip-path: polygon(${getRoutePath(route)});"></div>
-    <svg class="route-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+    <svg class="route-svg ${dimmed ? "is-dimmed" : ""}" viewBox="0 0 100 100" preserveAspectRatio="none" data-route-id="${route.id}">
       <polyline
-        class="route-polyline ${highlighted ? "is-highlighted" : ""}"
-        points="${route.stops.map((stop) => `${stop.x},${stop.y}`).join(" ")}"
+        class="route-polyline ${highlighted && !riddenPoints ? "is-highlighted" : ""} ${riddenPoints ? "is-ridden-base" : ""}"
+        points="${route.stops.map(s => `${s.x},${s.y}`).join(" ")}"
         style="--route:${route.color}; --glow:${route.glow};"
       ></polyline>
+      ${riddenPoints ? `
+        <polyline
+          class="route-polyline route-polyline--ridden"
+          points="${riddenPoints}"
+          style="--route:${route.color}; --glow:${route.glow};"
+        ></polyline>` : ""}
     </svg>
-    ${route.stops.map((stop, index) => renderStopMarker(route, stop, index)).join("")}
-    <button class="bus-marker ${highlighted ? "pulse" : ""}" data-open-route="${route.id}" style="left:${bus.x}%; top:${bus.y}%; --route:${route.color};">
-      <span>🚌</span>
-    </button>
+    ${route.stops.map((stop, index) => renderStopMarker(route, stop, index, dimmed, journeyStep)).join("")}
+    ${!dimmed ? `
+      <button class="bus-marker ${highlighted ? "pulse" : ""}" data-open-route="${route.id}" style="left:${bus.x}%; top:${bus.y}%; --route:${route.color};">
+        <span>🚌</span>
+      </button>` : ""}
   `;
 }
 
-function renderStopMarker(route, stop, index) {
+function renderStopMarker(route, stop, index, dimmed, journeyStep) {
+  if (dimmed) return "";
   const details = state.screen === "routeDetails" && state.selectedRouteId === route.id;
-  const status = details ? getStopStatus(route, index) : "";
-  const active = details && status.variant === "current";
+  const status  = details ? getStopStatus(route, index) : "";
+  const active  = details && status.variant === "current";
+  const isRiddenStop = journeyStep?.stops.some(s => s.id === stop.id);
   return `
-    <button class="stop-marker ${active ? "is-current" : ""}" data-open-route="${route.id}" style="left:${stop.x}%; top:${stop.y}%; --route:${route.color};">
+    <button class="stop-marker ${active ? "is-current" : ""} ${isRiddenStop ? "is-journey-stop" : ""}"
+      data-open-route="${route.id}"
+      style="left:${stop.x}%; top:${stop.y}%; --route:${route.color};">
       <span></span>
     </button>
   `;
@@ -320,14 +426,25 @@ function renderUserMarker() {
   `;
 }
 
-function renderRouteHeroCard(route) {
+function renderJourneyOverlay(journey) {
+  const walkLines = journey.steps
+    .filter(s => s.type === "walk")
+    .map(s => `
+      <polyline
+        class="walk-leg"
+        points="${s.points.map(p => `${p.x},${p.y}`).join(" ")}"
+      />
+    `).join("");
+
+  const { destPt } = journey;
+
   return `
-    <div class="route-hero">
-      <button class="ghost-button" data-back-map>←</button>
-      <div>
-        <div class="route-hero-title">${route.name}</div>
-        <div class="route-hero-subtitle">${route.shortName} servicing campus loop</div>
-      </div>
+    <svg class="journey-overlay-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+      ${walkLines}
+    </svg>
+    <div class="dest-pin" style="left:${destPt.x}%; top:${destPt.y}%;">
+      <div class="dest-pin-dot"></div>
+      <div class="dest-pin-label">${getRouteOption(state.selectedRouteOptionId)?.destination ?? "Destination"}</div>
     </div>
   `;
 }

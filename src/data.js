@@ -112,6 +112,20 @@ export const BUILDINGS = [
 
 export const USER_LOCATION = { x: 28, y: 61, label: "Current Location" };
 
+export const BUILDING_LOCATIONS = {
+  "Student Recreation Center": { x: 52, y: 46 },
+  "Bryant Denny Stadium":      { x: 43, y: 33 },
+  "Science Hall":              { x: 23, y: 66 },
+  "North Quad":                { x: 59, y: 18 },
+  "Union Plaza":               { x: 13, y: 78 },
+  "Engineering Complex":       { x: 25, y: 37 },
+  "Main Library":              { x: 57, y: 78 },
+  "Business School":           { x: 56, y: 42 },
+  "Health Center":             { x: 74, y: 20 },
+  "Innovation Hub":            { x: 20, y: 18 },
+  "Aquatics Center":           { x: 76, y: 84 },
+  "Arts Commons":              { x: 83, y: 37 }
+};
 // Each route has either a per-stop schedule or null (continuous loop, no fixed times).
 // Each stop entry is { stopName, times[] }.
 export const TIMETABLES = {
