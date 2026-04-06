@@ -126,6 +126,13 @@ export const BUILDING_LOCATIONS = {
   "Aquatics Center":           { x: 76, y: 84 },
   "Arts Commons":              { x: 83, y: 37 }
 };
+
+// ── Routing time constants (minutes) ─────────────────────────
+// These are used by the Dijkstra path planner in app.js.
+export const TIME_WALK_TO_STOP   = 3;   // any location → adjacent stop
+export const TIME_BUS_PER_STOP   = 2;   // one stop to the next on the same route
+export const TIME_WALK_DIRECT    = 20;  // walking directly between two locations
+
 // Each route has either a per-stop schedule or null (continuous loop, no fixed times).
 // Each stop entry is { stopName, times[] }.
 export const TIMETABLES = {

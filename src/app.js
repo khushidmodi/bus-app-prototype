@@ -1,6 +1,8 @@
-import { BUILDINGS, BUILDING_LOCATIONS, ROUTES, TIMETABLES, USER_LOCATION } from "./data.js";
+import { BUILDINGS, BUILDING_LOCATIONS, ROUTES, TIMETABLES, USER_LOCATION,
+         TIME_WALK_TO_STOP, TIME_BUS_PER_STOP, TIME_WALK_DIRECT } from "./data.js";
 
 const sheetHeights = ["0vh", "16vh", "42vh", "74vh"];
+const WALK_RADIUS  = 22; // map-unit radius within which a stop is "walkable"
 const initialOptionCatalog = Object.fromEntries(
   generateRouteOptions("Student Recreation Center").map((option) => [option.id, option])
 );
@@ -169,50 +171,117 @@ function seeded(seed) {
   };
 }
 
-function generateRouteOptions(destination, origin = USER_LOCATION.label) {
-  const random = seeded(`${origin} -> ${destination}`);
-  const routePool = ["r1", "r3", "r5"];
-  const pickRoute = (offset) => ROUTES.find((route) => route.id === routePool[offset]);
-  const duration = () => 2 + Math.floor(random() * 14);
-  const walkTime = duration();
-  const busTime = duration();
-  const mixedWalkTime = duration();
-  const mixedBusTime = duration();
+// ── Path planner ─────────────────────────────────────────────
+//
+// Two options are always returned:
+//   1. Best bus route: walk to nearest board stop → ride → walk to dest
+//   2. Walk only: direct walk, always TIME_WALK_DIRECT minutes
+//
+// Walk edges only connect locations to stops within WALK_RADIUS map-units.
+// A bus segment requires board and alight stops on the SAME route.
+// Segment structure: walk → bus → walk  (exactly, for the bus option)
 
-  return [
-    {
-      id: `route-opt-${destination}-bus`,
-      destination,
-      label: "Bus recommended",
-      type: "bus",
-      total: busTime + 3,
-      eta: nextEta(busTime + 3),
-      segments: [
-        { type: "bus", label: pickRoute(0).shortName, duration: busTime + 3, routeId: pickRoute(0).id }
-      ]
-    },
-    {
-      id: `route-opt-${destination}-mixed`,
-      destination,
-      label: "Walk + Bus",
-      type: "mixed",
-      total: mixedWalkTime + mixedBusTime,
-      eta: nextEta(mixedWalkTime + mixedBusTime),
-      segments: [
-        { type: "walk", label: "Walk to stop", duration: mixedWalkTime },
-        { type: "bus", label: pickRoute(1).shortName, duration: mixedBusTime, routeId: pickRoute(1).id }
-      ]
-    },
-    {
-      id: `route-opt-${destination}-walk`,
-      destination,
-      label: "Walk only",
-      type: "walk",
-      total: walkTime + 6,
-      eta: nextEta(walkTime + 6),
-      segments: [{ type: "walk", label: "Campus walk", duration: walkTime + 6 }]
+function getLocationPoint(name) {
+  if (!name || name === USER_LOCATION.label) return { x: USER_LOCATION.x, y: USER_LOCATION.y };
+  if (BUILDING_LOCATIONS[name]) return BUILDING_LOCATIONS[name];
+  const random = seeded(name);
+  return { x: 15 + Math.floor(random() * 70), y: 15 + Math.floor(random() * 70) };
+}
+
+// Returns all stops within walking radius of a given point
+function walkableStops(pt) {
+  const results = [];
+  for (const route of ROUTES) {
+    for (const stop of route.stops) {
+      if (dist2d(pt, stop) <= WALK_RADIUS) {
+        results.push({ stop, route });
+      }
     }
-  ].sort((left, right) => left.total - right.total);
+  }
+  return results;
+}
+
+// Finds the best (board stop, alight stop, route) triple.
+// Scores each candidate by time cost + small spatial penalty so that
+// geographically sensible stops are preferred when costs are equal.
+function findBestBusRoute(originName, destName) {
+  const originPt = getLocationPoint(originName);
+  const destPt   = getLocationPoint(destName);
+
+  const boardCandidates  = walkableStops(originPt);
+  const alightCandidates = walkableStops(destPt);
+
+  let best     = null;
+  let bestScore = Infinity;
+
+  for (const { stop: boardStop, route: boardRoute } of boardCandidates) {
+    for (const { stop: alightStop, route: alightRoute } of alightCandidates) {
+      if (boardRoute.id !== alightRoute.id) continue; // must be same route
+
+      const boardIdx  = boardRoute.stops.findIndex(s => s.id === boardStop.id);
+      const alightIdx = boardRoute.stops.findIndex(s => s.id === alightStop.id);
+      if (boardIdx === alightIdx) continue; // need to travel at least one stop
+
+      const numStops = Math.abs(alightIdx - boardIdx);
+      const timeCost = TIME_WALK_TO_STOP + numStops * TIME_BUS_PER_STOP + TIME_WALK_TO_STOP;
+      // Small spatial penalty so closer stops win ties
+      const spatialPenalty = (dist2d(originPt, boardStop) + dist2d(destPt, alightStop)) * 0.1;
+      const score = timeCost + spatialPenalty;
+
+      if (score < bestScore) {
+        bestScore = score;
+        best = { route: boardRoute, boardStop, alightStop, boardIdx, alightIdx, timeCost };
+      }
+    }
+  }
+
+  return best;
+}
+
+function generateRouteOptions(destination, origin = USER_LOCATION.label) {
+  const originName = origin || USER_LOCATION.label;
+
+  // Always offer a walk-only fallback
+  const walkOption = {
+    id: `route-opt-${destination}-walk`,
+    destination,
+    label: "Walk only",
+    type: "walk",
+    total: TIME_WALK_DIRECT,
+    eta: nextEta(TIME_WALK_DIRECT),
+    segments: [{ type: "walk", label: "Campus walk", duration: TIME_WALK_DIRECT }]
+  };
+
+  const bus = findBestBusRoute(originName, destination);
+
+  if (!bus) return [walkOption];
+
+  const numStops    = Math.abs(bus.alightIdx - bus.boardIdx);
+  const busDuration = numStops * TIME_BUS_PER_STOP;
+  const busTotal    = TIME_WALK_TO_STOP + busDuration + TIME_WALK_TO_STOP;
+
+  const busOption = {
+    id: `route-opt-${destination}-bus`,
+    destination,
+    label: "Bus recommended",
+    type: "bus",
+    total: busTotal,
+    eta: nextEta(busTotal),
+    segments: [
+      { type: "walk", label: "Walk to stop", duration: TIME_WALK_TO_STOP },
+      {
+        type: "bus",
+        label: bus.route.shortName,
+        routeId: bus.route.id,
+        boardStopId: bus.boardStop.id,
+        alightStopId: bus.alightStop.id,
+        duration: busDuration
+      },
+      { type: "walk", label: "Walk to destination", duration: TIME_WALK_TO_STOP }
+    ]
+  };
+
+  return [busOption, walkOption].sort((a, b) => a.total - b.total);
 }
 
 function nextEta(totalMinutes) {
@@ -260,26 +329,11 @@ function render() {
 
 // ── Journey geometry helpers ──────────────────────────────────
 
-function getBuildingLocation(name) {
-  if (BUILDING_LOCATIONS[name]) return BUILDING_LOCATIONS[name];
-  // Seeded fallback for arbitrary destinations not in the lookup
-  const random = seeded(name);
-  return { x: 15 + Math.floor(random() * 70), y: 15 + Math.floor(random() * 70) };
-}
-
 function dist2d(a, b) {
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
 }
 
-function nearestStopIndex(route, point) {
-  let best = 0;
-  let bestDist = Infinity;
-  route.stops.forEach((stop, i) => {
-    const d = dist2d(stop, point);
-    if (d < bestDist) { bestDist = d; best = i; }
-  });
-  return best;
-}
+
 
 // Returns an ordered list of draw steps for the selected option:
 //   { type: "walk",        points: [{x,y}, …] }
@@ -287,44 +341,58 @@ function nearestStopIndex(route, point) {
 function buildJourneyGeometry(option) {
   if (!option) return null;
 
-  const destName = option.destination;
-  const destPt   = getBuildingLocation(destName);
-  const steps    = [];
-  let   cursor   = { x: USER_LOCATION.x, y: USER_LOCATION.y };
+  const originName = state.plannerOriginValue;
+  const originPt   = getLocationPoint(originName);
+  const destName   = option.destination;
+  const destPt     = getLocationPoint(destName);
+  const steps      = [];
+  let   cursor     = { ...originPt };
 
   for (const seg of option.segments) {
     if (seg.type === "walk") {
-      // Walk leg: cursor → dest (last segment) or cursor → nearest stop of next bus seg
-      const nextBus = option.segments[option.segments.indexOf(seg) + 1];
-      if (nextBus && nextBus.type === "bus") {
+      // Determine the walk endpoint: next bus segment's board stop, or the destination
+      const segIdx  = option.segments.indexOf(seg);
+      const nextBus = option.segments.slice(segIdx + 1).find(s => s.type === "bus");
+      if (nextBus) {
         const route     = ROUTES.find(r => r.id === nextBus.routeId);
-        const boardIdx  = nearestStopIndex(route, cursor);
-        const boardStop = route.stops[boardIdx];
-        steps.push({ type: "walk", points: [cursor, boardStop] });
-        cursor = boardStop;
+        const boardStop = route.stops.find(s => s.id === nextBus.boardStopId);
+        if (boardStop) {
+          steps.push({ type: "walk", points: [cursor, boardStop] });
+          cursor = boardStop;
+        }
       } else {
-        // Walk-only or final walk leg → destination
         steps.push({ type: "walk", points: [cursor, destPt] });
         cursor = destPt;
       }
     } else if (seg.type === "bus") {
       const route      = ROUTES.find(r => r.id === seg.routeId);
       if (!route) continue;
-      const boardIdx   = nearestStopIndex(route, cursor);
-      const alightIdx  = nearestStopIndex(route, destPt);
-      // Ensure at least one stop travelled; if same, include one extra
-      const lo = Math.min(boardIdx, alightIdx);
-      const hi = Math.max(boardIdx, alightIdx, lo + 1);
-      const ridden = route.stops.slice(lo, hi + 1);
-      steps.push({ type: "bus-segment", route, stops: ridden, color: route.color, glow: route.glow });
-      cursor = ridden[ridden.length - 1];
 
-      // Walk from alighting stop to destination
-      const isLast = option.segments.indexOf(seg) === option.segments.length - 1;
-      if (isLast) {
-        steps.push({ type: "walk", points: [cursor, destPt] });
+      // Use the explicit stop IDs computed by the planner
+      const boardStop  = route.stops.find(s => s.id === seg.boardStopId);
+      const alightStop = route.stops.find(s => s.id === seg.alightStopId);
+
+      if (!boardStop || !alightStop) continue;
+
+      const boardIdx  = route.stops.indexOf(boardStop);
+      const alightIdx = route.stops.indexOf(alightStop);
+      const lo        = Math.min(boardIdx, alightIdx);
+      const hi        = Math.max(boardIdx, alightIdx);
+      const ridden    = route.stops.slice(lo, hi + 1);
+
+      // Walk from cursor to board stop if not already there
+      if (dist2d(cursor, boardStop) > 0.5) {
+        steps.push({ type: "walk", points: [cursor, boardStop] });
       }
+
+      steps.push({ type: "bus-segment", route, stops: ridden, color: route.color, glow: route.glow });
+      cursor = alightStop;
     }
+  }
+
+  // Ensure final walk to destination if cursor hasn't reached it
+  if (dist2d(cursor, destPt) > 0.5) {
+    steps.push({ type: "walk", points: [cursor, destPt] });
   }
 
   return { steps, destPt };
@@ -418,11 +486,22 @@ function renderStopMarker(route, stop, index, dimmed, journeyStep) {
 }
 
 function renderUserMarker() {
+  const originName = state.plannerOriginValue;
+  const isCustomOrigin = originName && originName !== USER_LOCATION.label;
+  const originPt = isCustomOrigin
+    ? getLocationPoint(originName)
+    : { x: USER_LOCATION.x, y: USER_LOCATION.y };
+
   return `
     <div class="user-marker" style="left:${USER_LOCATION.x}%; top:${USER_LOCATION.y}%;">
       <div class="user-pulse"></div>
       <div class="user-dot"></div>
     </div>
+    ${isCustomOrigin && state.selectedRouteOptionId ? `
+      <div class="origin-pin" style="left:${originPt.x}%; top:${originPt.y}%;">
+        <div class="origin-pin-dot"></div>
+        <div class="origin-pin-label">${originName}</div>
+      </div>` : ""}
   `;
 }
 
