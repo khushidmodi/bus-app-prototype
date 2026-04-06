@@ -468,17 +468,20 @@ function renderScreenOverlay() {
 function renderHomeSheet() {
   const results = state.routingResults;
   const searchValue = state.draftSearch || state.activeSearch;
-  const suggestions = BUILDINGS.filter((building) =>
-    building.toLowerCase().includes(searchValue.toLowerCase())
-  ).slice(0, 4);
+  const suggestions = getBuildingSuggestions(searchValue);
 
   return `
-    <div class="top-bar">
-      <label class="search-shell">
-        <input id="top-search-input" value="${searchValue}" placeholder="Where are you going?" />
-        <button class="search-submit" data-submit-top-search aria-label="Search destination">⌕</button>
-      </label>
-      <button class="filter-button" data-toggle-filters>☰</button>
+    <div class="top-search-stack">
+      <div class="top-bar">
+        <label class="search-shell">
+          <input id="top-search-input" value="${searchValue}" placeholder="Where are you going?" />
+          <button class="search-submit" data-submit-top-search aria-label="Search destination">⌕</button>
+        </label>
+        <button class="filter-button" data-toggle-filters>☰</button>
+      </div>
+      <div class="top-search-suggestions ${(state.showPlanner || !state.draftSearch || !suggestions.length) ? "is-hidden" : ""}" data-top-suggestions>
+        ${renderTopSearchSuggestionItems(suggestions)}
+      </div>
     </div>
     ${renderFilterModal()}
     <section class="bottom-sheet ${state.sheetState === 0 ? "is-hidden" : ""}" data-sheet>
@@ -521,6 +524,66 @@ function renderSearchInputs(suggestions) {
         : ""}
     </div>
   `;
+}
+
+function getBuildingSuggestions(query) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return [];
+  }
+
+  return BUILDINGS.filter((building) =>
+    building.toLowerCase().startsWith(normalized)
+  ).slice(0, 4);
+}
+
+function renderTopSearchSuggestionItems(suggestions) {
+  return suggestions
+    .map(
+      (building) => `<button class="top-suggestion-item" data-top-suggestion="${building}">${building}</button>`
+    )
+    .join("");
+}
+
+function updateTopSearchSuggestions(query) {
+  const listEl = document.querySelector("[data-top-suggestions]");
+  if (!listEl) {
+    return;
+  }
+
+  const suggestions = getBuildingSuggestions(query);
+  const shouldShow = Boolean(query.trim()) && !state.showPlanner && suggestions.length > 0;
+
+  if (!shouldShow) {
+    listEl.classList.add("is-hidden");
+    listEl.innerHTML = "";
+    return;
+  }
+
+  listEl.classList.remove("is-hidden");
+  listEl.innerHTML = renderTopSearchSuggestionItems(suggestions);
+  bindTopSearchSuggestionEvents();
+}
+
+function bindTopSearchSuggestionEvents() {
+  document.querySelectorAll("[data-top-suggestion]").forEach((button) => {
+    button.addEventListener("click", () => {
+      submitDestination(button.dataset.topSuggestion);
+    });
+  });
+}
+
+function focusInputById(inputId) {
+  window.requestAnimationFrame(() => {
+    const input = document.querySelector(`#${inputId}`);
+    if (!input) {
+      return;
+    }
+
+    input.focus();
+    const cursor = input.value.length;
+    input.setSelectionRange(cursor, cursor);
+  });
 }
 
 function renderRecentRoutes() {
@@ -870,12 +933,26 @@ function bindEvents() {
     topSearchInput.addEventListener("input", (event) => {
       state.draftSearch = event.target.value;
       if (!state.draftSearch) {
+        const shouldRender = state.showPlanner || state.routingResults.length > 0;
         state.activeSearch = "";
         state.showPlanner = false;
         state.routingResults = [];
         state.selectedRouteOptionId = null;
-        render();
+
+        if (shouldRender) {
+          render();
+          focusInputById("top-search-input");
+        } else {
+          updateTopSearchSuggestions("");
+        }
+        return;
       }
+
+      updateTopSearchSuggestions(state.draftSearch);
+    });
+
+    topSearchInput.addEventListener("focus", () => {
+      updateTopSearchSuggestions(topSearchInput.value);
     });
 
     topSearchInput.addEventListener("keydown", (event) => {
@@ -887,6 +964,8 @@ function bindEvents() {
       submitDestination(topSearchInput.value);
     });
   }
+
+  bindTopSearchSuggestionEvents();
 
   const input = document.querySelector("#destination-input");
   if (input) {

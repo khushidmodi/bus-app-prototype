@@ -313,12 +313,48 @@ button {
   animation: pulse 2.8s ease-out infinite;
 }
 
-.top-bar {
+.top-search-stack {
   position: absolute;
   inset: 20px 20px auto;
+  z-index: 10;
+}
+
+.top-bar {
+  position: relative;
   display: flex;
   gap: 12px;
-  z-index: 10;
+}
+
+.top-search-suggestions {
+  margin-top: 8px;
+  border-radius: 16px;
+  background: rgba(9, 19, 31, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  backdrop-filter: blur(14px);
+}
+
+.top-search-suggestions.is-hidden {
+  display: none;
+}
+
+.top-suggestion-item {
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  background: transparent;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-weight: 600;
+}
+
+.top-suggestion-item:last-child {
+  border-bottom: 0;
+}
+
+.top-suggestion-item:hover {
+  background: rgba(125, 182, 255, 0.14);
 }
 
 .search-shell {
