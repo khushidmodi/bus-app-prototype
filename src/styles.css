@@ -151,6 +151,11 @@ button {
   width: 100%;
   height: 100%;
   overflow: visible;
+  transition: opacity 280ms ease;
+}
+
+.route-svg.is-dimmed {
+  opacity: 0.12;
 }
 
 .route-polyline {
@@ -167,6 +172,88 @@ button {
 .route-polyline.is-highlighted {
   opacity: 1;
   stroke-width: 4.4;
+}
+
+/* Ridden portion of a bus route — drawn on top, full opacity */
+.route-polyline--ridden {
+  opacity: 1;
+  stroke-width: 5.5;
+  filter: drop-shadow(0 0 10px var(--glow));
+}
+
+/* Full route shown faintly as context behind the ridden segment */
+.route-polyline.is-ridden-base {
+  opacity: 0.18;
+  stroke-width: 2.5;
+}
+
+/* Full-map SVG overlay for walk legs and journey lines */
+.journey-overlay-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* Dashed walk leg polyline */
+.walk-leg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 0.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1.2 2.2;
+  filter: drop-shadow(0 0 1.5px rgba(0,0,0,0.7));
+}
+
+/* Destination pin */
+.dest-pin {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  z-index: 8;
+  pointer-events: none;
+}
+
+.dest-pin-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: linear-gradient(135deg, #fff 0%, #d0e8ff 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.45), 0 0 0 3px rgba(255,255,255,0.25);
+}
+
+.dest-pin-label {
+  background: rgba(8, 15, 28, 0.88);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  white-space: nowrap;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* Journey stop markers — larger, glowing */
+.stop-marker.is-journey-stop {
+  width: 22px;
+  height: 22px;
+  border-width: 4px;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--route) 25%, transparent),
+              0 0 12px color-mix(in srgb, var(--route) 50%, transparent);
+  z-index: 7;
 }
 
 .stop-marker,
