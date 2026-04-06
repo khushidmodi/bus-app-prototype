@@ -36,7 +36,8 @@ const state = {
   },
   busProgress: Object.fromEntries(ROUTES.map((route, index) => [route.id, (index * 0.17) % 1])),
   busPauseUntil: Object.fromEntries(ROUTES.map((route) => [route.id, 0])),
-  openTimetable: null
+  openTimetable: null,
+  routeDetailsBackScreen: "map"
 };
 
 const app = document.querySelector("#app");
@@ -1012,9 +1013,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-open-route]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.selectedRouteId = button.dataset.openRoute;
-      state.screen = "routeDetails";
-      state.sheetState = 3;
+      openRouteDetails(button.dataset.openRoute, state.screen);
       render();
     });
   });
@@ -1162,25 +1161,28 @@ function bindEvents() {
   });
 
   document.querySelector("[data-show-stops]")?.addEventListener("click", () => {
-    state.selectedRouteId = "r1";
-    state.screen = "routeDetails";
-    state.sheetState = 3;
+    openRouteDetails("r1", "map");
     render();
   });
 
   document.querySelector("[data-apply-option]")?.addEventListener("click", () => {
     const option = getRouteOption(state.selectedRouteOptionId);
     const routeId = option?.segments.find((segment) => segment.routeId)?.routeId ?? "r1";
-    state.selectedRouteId = routeId;
     state.favoriteRoutes.add(routeId);
-    state.screen = "routeDetails";
-    state.sheetState = 3;
+    openRouteDetails(routeId, "map");
     render();
   });
 
   document.querySelector("[data-back-map]")?.addEventListener("click", () => {
-    state.screen = "map";
-    state.sheetState = 2;
+    if (state.screen === "routeDetails") {
+      state.screen = state.routeDetailsBackScreen;
+      if (state.screen === "map") {
+        state.sheetState = 2;
+      }
+    } else {
+      state.screen = "map";
+      state.sheetState = 2;
+    }
     render();
   });
 
@@ -1327,6 +1329,13 @@ function getHighlightedRoutesFromOption(optionId) {
 
 function getRouteOption(optionId) {
   return state.routeOptionCatalog[optionId] ?? state.routingResults.find((item) => item.id === optionId);
+}
+
+function openRouteDetails(routeId, originScreen = state.screen) {
+  state.selectedRouteId = routeId;
+  state.routeDetailsBackScreen = originScreen === "routeDetails" ? "map" : originScreen;
+  state.screen = "routeDetails";
+  state.sheetState = 3;
 }
 
 function submitDestination(value) {
