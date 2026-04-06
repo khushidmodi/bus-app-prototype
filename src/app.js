@@ -18,6 +18,9 @@ const state = {
   showFilters: false,
   filterSearch: "",
   showPlanner: false,
+  plannerOriginValue: USER_LOCATION.label,
+  plannerOriginQuery: "",
+  plannerOriginEditorOpen: false,
   favoriteRouteOptionIds: new Set(["route-opt-Student Recreation Center-mixed"]),
   favoriteRoutes: new Set(["r1", "r5"]),
   alerts: [
@@ -164,8 +167,8 @@ function seeded(seed) {
   };
 }
 
-function generateRouteOptions(destination) {
-  const random = seeded(destination);
+function generateRouteOptions(destination, origin = USER_LOCATION.label) {
+  const random = seeded(`${origin} -> ${destination}`);
   const routePool = ["r1", "r3", "r5"];
   const pickRoute = (offset) => ROUTES.find((route) => route.id === routePool[offset]);
   const duration = () => 2 + Math.floor(random() * 14);
@@ -386,30 +389,6 @@ function renderHomeSheet() {
   `;
 }
 
-function renderSearchInputs(suggestions) {
-  return `
-    <div class="routing-panel ${state.showPlanner ? "is-active" : ""}">
-      <div class="search-stack">
-        <div class="input-pill">
-          <span class="input-label">From</span>
-          <span>${USER_LOCATION.label}</span>
-        </div>
-        <div class="input-pill search-input">
-          <span class="input-label">To</span>
-          <input id="destination-input" value="${state.draftSearch || state.activeSearch}" placeholder="Search buildings" />
-        </div>
-      </div>
-      ${suggestions.length && (state.draftSearch || state.activeSearch)
-        ? `<div class="suggestion-list">${suggestions
-            .map(
-              (building) => `<button class="suggestion-item" data-destination="${building}">${building}</button>`
-            )
-            .join("")}</div>`
-        : ""}
-    </div>
-  `;
-}
-
 function getBuildingSuggestions(query) {
   const normalized = query.trim().toLowerCase();
   if (!normalized) {
@@ -419,6 +398,29 @@ function getBuildingSuggestions(query) {
   return BUILDINGS.filter((building) =>
     building.toLowerCase().startsWith(normalized)
   ).slice(0, 4);
+}
+
+function getOriginSuggestions(query) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return [];
+  }
+
+  const suggestions = [USER_LOCATION.label];
+
+  BUILDINGS.filter((building) => {
+    if (!normalized) {
+      return true;
+    }
+
+    return building.toLowerCase().startsWith(normalized);
+  }).forEach((building) => {
+    if (!suggestions.includes(building)) {
+      suggestions.push(building);
+    }
+  });
+
+  return suggestions.slice(0, 4);
 }
 
 function renderTopSearchSuggestionItems(suggestions) {
@@ -468,6 +470,51 @@ function focusInputById(inputId) {
     const cursor = input.value.length;
     input.setSelectionRange(cursor, cursor);
   });
+}
+
+function renderSearchInputs(suggestions) {
+  const originValue = state.plannerOriginValue;
+  const destinationValue = state.draftSearch || state.activeSearch;
+  const originQuery = state.plannerOriginQuery;
+  const originSuggestions = getOriginSuggestions(originQuery);
+
+  return `
+    <div class="routing-panel ${state.showPlanner ? "is-active" : ""}">
+      <div class="search-stack">
+        <div class="origin-stack">
+          <span class="input-label">From</span>
+          ${state.plannerOriginEditorOpen
+            ? `<div class="origin-editor-wrap">
+                <input
+                  id="origin-input"
+                  class="origin-editor-input"
+                  value="${originQuery}"
+                  placeholder="Type a start location"
+                  autocomplete="off"
+                />
+                <div class="suggestion-list ${(originQuery.trim() && originSuggestions.length) ? "" : "is-hidden"}" data-origin-suggestions>
+                  ${originSuggestions
+                    .map(
+                      (building) => `<button class="suggestion-item" data-origin-suggestion="${building}">${building}</button>`
+                    )
+                    .join("")}
+                </div>
+              </div>`
+            : `<div class="origin-picker">
+                <button class="origin-pill" data-toggle-origin-picker type="button">
+                  <span class="origin-pill-value">${originValue || "Current Location"}</span>
+                  <span class="origin-pill-hint">Change</span>
+                </button>
+              </div>`}
+        </div>
+        <div class="input-pill search-input">
+          <span class="input-label">To</span>
+          <input id="destination-input" value="${destinationValue}" placeholder="Search buildings" />
+        </div>
+      </div>
+      <button class="select-route-button" data-search-routes>Update Routes</button>
+    </div>
+  `;
 }
 
 function renderRecentRoutes() {
@@ -874,6 +921,45 @@ function bindEvents() {
     });
   }
 
+  const originInput = document.querySelector("#origin-input");
+  if (originInput) {
+    originInput.addEventListener("input", (event) => {
+      state.plannerOriginQuery = event.target.value;
+      state.plannerOriginEditorOpen = true;
+      updateOriginSuggestions(state.plannerOriginQuery);
+    });
+
+    originInput.addEventListener("focus", () => {
+      state.plannerOriginEditorOpen = true;
+      updateOriginSuggestions(state.plannerOriginQuery);
+    });
+
+    originInput.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        state.plannerOriginEditorOpen = false;
+        state.plannerOriginQuery = "";
+        render();
+        return;
+      }
+
+      if (event.key !== "Enter") {
+        return;
+      }
+
+      event.preventDefault();
+      submitRouteSearch();
+    });
+  }
+
+  bindOriginSuggestionEvents();
+
+  document.querySelector("[data-toggle-origin-picker]")?.addEventListener("click", () => {
+    state.plannerOriginEditorOpen = true;
+    state.plannerOriginQuery = state.plannerOriginValue === USER_LOCATION.label ? "" : state.plannerOriginValue;
+    render();
+    focusInputById("origin-input");
+  });
+
   document.querySelectorAll("[data-screen]").forEach((button) => {
     button.addEventListener("click", () => {
       const targetScreen = button.dataset.screen;
@@ -915,7 +1001,7 @@ function bindEvents() {
         state.activeSearch = option.destination;
         state.draftSearch = option.destination;
         state.showPlanner = true;
-        state.routingResults = generateRouteOptions(option.destination);
+        state.routingResults = generateRouteOptions(option.destination, state.plannerOriginValue || USER_LOCATION.label);
         state.routingResults.forEach((item) => {
           state.routeOptionCatalog[item.id] = item;
         });
@@ -928,6 +1014,10 @@ function bindEvents() {
 
   document.querySelector("[data-submit-top-search]")?.addEventListener("click", () => {
     submitDestination(topSearchInput?.value || state.draftSearch);
+  });
+
+  document.querySelector("[data-search-routes]")?.addEventListener("click", () => {
+    submitRouteSearch();
   });
 
   document.querySelectorAll("[data-favorite-option]").forEach((button) => {
@@ -1230,13 +1320,60 @@ function submitDestination(value) {
   state.activeSearch = destination;
   state.draftSearch = destination;
   state.showPlanner = true;
-  state.routingResults = generateRouteOptions(destination);
+  state.routingResults = generateRouteOptions(destination, state.plannerOriginValue || USER_LOCATION.label);
   state.routingResults.forEach((option) => {
     state.routeOptionCatalog[option.id] = option;
   });
   state.selectedRouteOptionId = state.routingResults[0]?.id ?? null;
   state.sheetState = 3;
   render();
+}
+
+function submitRouteSearch() {
+  const destination = (state.draftSearch || state.activeSearch).trim();
+  if (!destination) {
+    return;
+  }
+
+  const origin = (state.plannerOriginValue || USER_LOCATION.label).trim() || USER_LOCATION.label;
+  state.plannerOriginValue = origin;
+  state.activeSearch = destination;
+  state.draftSearch = destination;
+  state.showPlanner = true;
+  state.routingResults = generateRouteOptions(destination, origin);
+  state.routingResults.forEach((option) => {
+    state.routeOptionCatalog[option.id] = option;
+  });
+  state.selectedRouteOptionId = state.routingResults[0]?.id ?? null;
+  state.sheetState = 3;
+  render();
+}
+
+function updateOriginSuggestions(query) {
+  const listEl = document.querySelector("[data-origin-suggestions]");
+  if (!listEl) {
+    return;
+  }
+
+  const suggestions = getOriginSuggestions(query);
+  listEl.classList.toggle("is-hidden", !suggestions.length);
+  listEl.innerHTML = suggestions
+    .map(
+      (building) => `<button class="suggestion-item" data-origin-suggestion="${building}">${building}</button>`
+    )
+    .join("");
+  bindOriginSuggestionEvents();
+}
+
+function bindOriginSuggestionEvents() {
+  document.querySelectorAll("[data-origin-suggestion]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.plannerOriginValue = button.dataset.originSuggestion;
+      state.plannerOriginQuery = "";
+      state.plannerOriginEditorOpen = false;
+      render();
+    });
+  });
 }
 
 function getCurrentStopIndex(route) {
