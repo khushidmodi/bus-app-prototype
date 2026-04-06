@@ -246,6 +246,43 @@ button {
   margin-top: 2px;
 }
 
+/* Origin pin (custom start location) */
+.origin-pin {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  z-index: 8;
+  pointer-events: none;
+}
+
+.origin-pin-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: linear-gradient(135deg, #4f89ff 0%, #a0c4ff 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.45), 0 0 0 3px rgba(79,137,255,0.3);
+}
+
+.origin-pin-label {
+  background: rgba(8, 15, 28, 0.88);
+  backdrop-filter: blur(8px);
+  color: #a0c4ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(79,137,255,0.25);
+  white-space: nowrap;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
 /* Journey stop markers — larger, glowing */
 .stop-marker.is-journey-stop {
   width: 22px;
