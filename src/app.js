@@ -1374,7 +1374,6 @@ function renderAlertCreatePage() {
         <button class="ghost-button" data-close-alert-create>←</button>
         <div>
           <div class="page-title">Add Notification</div>
-          <div class="page-subtitle">Create simulated bus arrival alerts</div>
         </div>
       </div>
       <div class="panel-scroll">
