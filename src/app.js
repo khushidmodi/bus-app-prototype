@@ -639,8 +639,8 @@ function renderRouteLayer(route, highlightedRouteIds, journey) {
     </svg>
     ${route.stops.map((stop, index) => renderStopMarker(route, stop, index, dimmed, journeyStep)).join("")}
     ${!dimmed ? `
-      <button class="bus-marker ${highlighted ? "pulse" : ""}" data-open-route="${route.id}" style="left:${bus.x}%; top:${bus.y}%; --route:${route.color};">
-        <span>🚌</span>
+      <button class="bus-marker ${highlighted ? "pulse" : ""}" data-open-route="${route.id}" style="left:${bus.x}%; top:${bus.y}%; --route:${route.color};" aria-label="Open ${route.name}">
+        <span class="map-bus-emoji" aria-hidden="true">🚌</span>
       </button>` : ""}
   `;
 }
@@ -922,11 +922,11 @@ function renderQuickActions() {
   return `
     <div class="quick-actions">
       <button class="quick-card" data-open-routes>
-        <span>🚌</span>
+        <span class="icon icon-bus" aria-hidden="true"></span>
         <strong>Bus Routes</strong>
       </button>
       <button class="quick-card" data-show-stops>
-        <span>📍</span>
+        <span class="icon icon-stop" aria-hidden="true"></span>
         <strong>Stops</strong>
       </button>
     </div>
@@ -941,8 +941,8 @@ function renderRoutingResults(results) {
           const segments = option.segments
             .map((segment) =>
               segment.type === "walk"
-                ? `<span class="seg">🚶 ${segment.duration} min</span>`
-                : `<span class="seg">🚌 ${segment.label}</span>`
+                ? `<span class="seg">Walk ${segment.duration} min</span>`
+                : `<span class="seg">Bus ${segment.label}</span>`
             )
             .join("<span class='seg-arrow'>›</span>");
           const favorited = state.favoriteRouteOptionIds.has(option.id);
@@ -1241,11 +1241,13 @@ function renderRouteListCard(route, index) {
       <div class="list-copy" data-open-route="${route.id}">
         <div class="list-title">${route.name}</div>
         <div class="list-window">${route.activeHours}</div>
-        <div class="list-meta">⏱ ${route.durationLabel} • 📍 ${route.stops.length} stops</div>
+        <div class="list-meta">Duration ${route.durationLabel} • ${route.stops.length} stops</div>
       </div>
       <div class="status-stack">
         <span class="status-pill ${active ? "active" : "inactive"}">${active ? "Active" : "Inactive"}</span>
-        <button class="calendar-button ${isOpen ? "is-active" : ""}" data-toggle-timetable="${route.id}" aria-label="View schedule" title="View schedule">🗓</button>
+        <button class="calendar-button ${isOpen ? "is-active" : ""}" data-toggle-timetable="${route.id}" aria-label="View schedule" title="View schedule">
+          <span class="icon icon-calendar" aria-hidden="true"></span>
+        </button>
       </div>
       ${isOpen ? renderTimetablePanel(route, timetable) : ""}
     </article>

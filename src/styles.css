@@ -299,6 +299,90 @@ button {
   transform: translate(-50%, -50%);
 }
 
+.icon {
+  display: inline-block;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.icon-bus {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 2px solid currentColor;
+}
+
+.icon-bus::before,
+.icon-bus::after {
+  content: "";
+  position: absolute;
+}
+
+.icon-bus::before {
+  left: 2px;
+  right: 2px;
+  top: 2px;
+  height: 4px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.28;
+}
+
+.icon-bus::after {
+  width: 8px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  bottom: 3px;
+  left: 2px;
+  box-shadow: 0 -5px 0 color-mix(in srgb, currentColor 65%, transparent 35%);
+}
+
+.icon-stop {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 3px solid currentColor;
+}
+
+.icon-stop::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.icon-calendar {
+  width: 16px;
+  height: 14px;
+  border: 1.8px solid currentColor;
+  border-radius: 4px;
+}
+
+.icon-calendar::before,
+.icon-calendar::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+}
+
+.icon-calendar::before {
+  top: 3px;
+  border-top: 1.8px solid currentColor;
+}
+
+.icon-calendar::after {
+  top: -3px;
+  height: 3px;
+  width: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  left: 3px;
+  box-shadow: 7px 0 0 currentColor;
+}
+
 .stop-marker {
   width: 18px;
   height: 18px;
@@ -316,11 +400,19 @@ button {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: rgba(17, 31, 48, 0.95);
-  border: 2px solid color-mix(in srgb, var(--route) 78%, white 22%);
-  box-shadow: 0 0 0 10px rgba(255, 255, 255, 0.05), 0 0 20px rgba(0, 0, 0, 0.32);
-  color: white;
+  background: color-mix(in srgb, var(--route) 38%, #f7fbff 62%);
+  border: 2px solid color-mix(in srgb, var(--route) 78%, #ffffff 22%);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--route) 24%, transparent), 0 0 16px rgba(0, 0, 0, 0.35);
+  color: #152235;
+  display: grid;
+  place-items: center;
   transition: left 1.9s linear, top 1.9s linear, transform 220ms ease;
+}
+
+.map-bus-emoji {
+  font-size: 20px;
+  line-height: 1;
+  transform: translateY(-1px);
 }
 
 .bus-marker.pulse {
@@ -950,6 +1042,10 @@ h2,
   gap: 10px;
 }
 
+.quick-card .icon {
+  color: rgba(224, 236, 255, 0.95);
+}
+
 .route-option.is-selected,
 .saved-card.soft,
 .stop-row.is-bus-location {
@@ -990,6 +1086,8 @@ h2,
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.06);
   color: white;
+  display: inline-grid;
+  place-items: center;
 }
 
 .select-route-button {
