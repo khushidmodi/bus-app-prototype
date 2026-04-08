@@ -854,6 +854,9 @@ body[data-theme="light"] .theme-button {
   color: #f4f8fc;
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ── Filter modal ─────────────────────────────────────────── */

@@ -1178,11 +1178,13 @@ function buildLeafletOverlayLayers() {
   });
 
   const userPoint = toLatLng(USER_LOCATION);
+  const originIsCurrentLocation = !state.plannerOriginValue || state.plannerOriginValue === USER_LOCATION.label;
   const user = L.marker([userPoint.lat, userPoint.lng], {
-    icon: createPinIcon("leaflet-user-pin", "Current Location", "leaflet-user-dot"),
+    icon: createPinIcon("leaflet-user-pin", "", "leaflet-user-dot"),
     interactive: false,
     keyboard: false,
-    zIndexOffset: 900
+    zIndexOffset: 900,
+    opacity: state.selectedRouteOptionId && !originIsCurrentLocation ? 0.3 : 1
   }).addTo(realMapInstance);
 
   let origin = null;
@@ -1406,7 +1408,11 @@ function renderTopBar() {
           <button class="search-submit" data-submit-top-search aria-label="Search destination">⌕</button>
         </label>
         <button class="theme-button" data-toggle-theme type="button" aria-label="Switch to ${state.theme === "dark" ? "light" : "dark"} mode"><span class="theme-icon" aria-hidden="true">${state.theme === "dark" ? "☀" : "☾"}</span></button>
-        <button class="filter-button" data-toggle-filters>☰</button>
+        <button class="filter-button" data-toggle-filters aria-label="Filter routes">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M3 4.5h18L13.5 12v6.5l-3-1.5V12L3 4.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </button>
       </div>
       <div class="top-search-suggestions ${(state.showPlanner || !state.topSearchOpen || !suggestions.length) ? "is-hidden" : ""}" data-top-suggestions>
         ${renderTopSearchSuggestionItems(suggestions)}
@@ -1758,10 +1764,26 @@ function renderJourneyDetailsSheet() {
             `;
           }).join("")}
         </div>
-        ${legIdx < busSegs.length - 1 ? '<div class="journey-transfer-divider">🔄 Transfer to next route</div>' : ''}
+        ${legIdx < busSegs.length - 1 ? '<div class="journey-transfer-divider">Transfer to next route</div>' : ''}
       </div>
     `;
   }).join("");
+
+  const eyebrow = busSegs.length === 0
+    ? "Journey · Walk only"
+    : busSegs.length === 1
+      ? "Journey · 1 route"
+      : `Journey · ${busSegs.length} routes`;
+
+  const walkOnlyHtml = busSegs.length === 0 ? `
+    <div class="journey-leg" style="--route:#888;">
+      <div class="journey-leg-header">
+        <div class="journey-leg-title">Walk to destination</div>
+        <div class="journey-leg-eta">${option.total} min</div>
+      </div>
+      <p class="status-copy" style="margin:6px 0 10px;">No bus service needed for this route</p>
+    </div>
+  ` : "";
 
   return `
     <section class="bottom-sheet route-details-sheet details-open ${isSheetCollapsed() ? "is-hidden" : ""}" data-sheet>
@@ -1769,13 +1791,13 @@ function renderJourneyDetailsSheet() {
       <div class="sheet-header sheet-header--sticky">
         <button class="ghost-button" data-back-map>←</button>
         <div>
-          <div class="eyebrow">Journey · ${busSegs.length} routes</div>
+          <div class="eyebrow">${eyebrow}</div>
           <h2>to ${option.destination}</h2>
         </div>
         <div class="eta-pill">${option.total} min</div>
       </div>
       <div class="sheet-content">
-        ${legsHtml}
+        ${legsHtml || walkOnlyHtml}
       </div>
     </section>
   `;
@@ -1948,7 +1970,7 @@ function renderTimetablePanel(route, timetable) {
     return `
       <div class="timetable-panel" style="--route:${route.color};">
         <div class="timetable-loop-notice">
-          <span class="timetable-loop-icon">🔄</span>
+          <span class="timetable-loop-icon"></span>
           <div>
             <div class="timetable-loop-title">Continuous Loop</div>
             <div class="timetable-loop-body">The ${route.name} runs on a continuous loop with no fixed departure schedule. Buses arrive approximately every ${route.durationLabel}.</div>
@@ -2593,15 +2615,9 @@ function bindEvents() {
     const busSegs = option.segments.filter(s => s.type === "bus");
     // Favourite all bus routes in this journey
     busSegs.forEach(s => state.favoriteRoutes.add(s.routeId));
-    if (busSegs.length > 1) {
-      // Multi-leg journey: open the journey detail view
-      state.screen = "journeyDetails";
-      setSheetPreset(3);
-    } else {
-      // Single-leg: open the single route detail sheet as before
-      const routeId = busSegs[0]?.routeId ?? "r1";
-      openRouteDetails(routeId, "map");
-    }
+    // Always open the journey detail view regardless of leg count
+    state.screen = "journeyDetails";
+    setSheetPreset(3);
     render();
   });
 
