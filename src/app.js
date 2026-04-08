@@ -761,6 +761,20 @@ function clearSelectedStop() {
   state.selectedStop = null;
 }
 
+function getWalkPathStyle() {
+  if (state.theme === "light") {
+    return {
+      color: "#1d4ed8",
+      opacity: 0.88
+    };
+  }
+
+  return {
+    color: "#eaf2ff",
+    opacity: 0.75
+  };
+}
+
 function render() {
   setSheetHeight(state.sheetHeightVh);
   applyTheme();
@@ -1167,11 +1181,12 @@ function buildLeafletOverlayLayers() {
         const latLng = toLatLng(point);
         return [latLng.lat, latLng.lng];
       });
+      const walkPathStyle = getWalkPathStyle();
 
       const walkLayer = L.polyline(walkLatLngs, {
-        color: "#eaf2ff",
+        color: walkPathStyle.color,
         weight: 3,
-        opacity: 0.75,
+        opacity: walkPathStyle.opacity,
         dashArray: "5 8",
         lineCap: "round",
         lineJoin: "round"

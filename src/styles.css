@@ -465,6 +465,11 @@ body[data-theme="light"] .map-canvas--real {
   filter: drop-shadow(0 0 1.5px rgba(0,0,0,0.7));
 }
 
+body[data-theme="light"] .walk-leg {
+  stroke: #1d4ed8;
+  filter: drop-shadow(0 0 1.5px rgba(191, 219, 254, 0.9));
+}
+
 /* Destination pin */
 .dest-pin {
   position: absolute;
@@ -1073,13 +1078,27 @@ body[data-theme="light"] .top-search-stack .theme-button {
   font-size: 0.95rem;
 }
 
+body[data-theme="light"] .filter-search-input {
+  background: #ffffff;
+  border-color: var(--line);
+  color: #111827;
+}
+
 .filter-search-input::placeholder {
   color: rgba(255, 255, 255, 0.38);
+}
+
+body[data-theme="light"] .filter-search-input::placeholder {
+  color: #9ca3af;
 }
 
 .filter-search-input:focus {
   border-color: rgba(125, 182, 255, 0.45);
   background: rgba(255, 255, 255, 0.09);
+}
+
+body[data-theme="light"] .filter-search-input:focus {
+  background: #ffffff;
 }
 
 .filter-route-list {
@@ -1376,8 +1395,16 @@ h2,
   outline: none;
 }
 
+body[data-theme="light"] .origin-editor-input {
+  color: #111827;
+}
+
 .origin-editor-input::placeholder {
   color: rgba(255, 255, 255, 0.45);
+}
+
+body[data-theme="light"] .origin-editor-input::placeholder {
+  color: #9ca3af;
 }
 
 .input-pill {
@@ -1403,6 +1430,14 @@ h2,
   border: 0;
   outline: 0;
   color: white;
+}
+
+body[data-theme="light"] .search-input input {
+  color: #111827;
+}
+
+body[data-theme="light"] .search-input input::placeholder {
+  color: #9ca3af;
 }
 
 .suggestion-list {
@@ -1931,6 +1966,11 @@ body[data-theme="light"] .quick-card .icon {
   border: 0;
 }
 
+.alert-form label span,
+.alert-form legend {
+  color: var(--text);
+}
+
 .alert-form select {
   height: 54px;
   border-radius: 18px;
@@ -2056,6 +2096,49 @@ body[data-theme="light"] .quick-card .icon {
   background: rgba(255, 255, 255, 0.07);
   color: white;
   font-weight: 700;
+}
+
+body[data-theme="light"] .empty-state {
+  background: #ffffff;
+  color: #4b5563;
+  border: 1px solid var(--line);
+}
+
+body[data-theme="light"] .alert-form label span,
+body[data-theme="light"] .alert-form legend {
+  color: #111827;
+}
+
+body[data-theme="light"] .alert-form select {
+  background: #ffffff;
+  border-color: var(--line);
+  color: #111827;
+}
+
+body[data-theme="light"] .alert-form select option {
+  background: #ffffff;
+  color: #111827;
+}
+
+body[data-theme="light"] .day-pill {
+  background: #ffffff;
+  color: #374151;
+  border: 1px solid var(--line);
+}
+
+body[data-theme="light"] .day-pill.is-selected {
+  color: #166534;
+}
+
+body[data-theme="light"] .alert-status.is-disabled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+body[data-theme="light"] .alert-card-meta span {
+  background: #f9fafb;
+  color: #4b5563;
+  border: 1px solid var(--line);
 }
 
 .danger-button {
