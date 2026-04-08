@@ -1349,34 +1349,52 @@ function renderJourneyOverlay(journey) {
 
 function renderScreenOverlay() {
   if (state.screen === "saved") {
-    return renderSavedPage();
+    return `
+    ${renderSavedPage()}
+    `;
   }
 
   if (state.screen === "alerts") {
-    return renderAlertsPage();
+    return `
+     ${renderAlertsPage()}
+    `;
   }
 
   if (state.screen === "routes") {
-    return renderRoutesPage();
+    return `
+     ${renderTopBar()}
+     ${renderRoutesPage()}
+    `;
   }
 
   if (state.screen === "stops") {
-    return renderStopsPage();
+    return `
+     ${renderTopBar()}
+     ${renderStopsPage()}
+    `;
   }
 
   if (state.screen === "routeDetails") {
-    return renderRouteDetailsSheet();
+    return `
+     ${renderTopBar()}
+     ${renderRouteDetailsSheet()}
+     `;
   }
 
   if (state.screen === "journeyDetails") {
-    return renderJourneyDetailsSheet();
+    return `
+      ${renderTopBar()}
+      ${renderJourneyDetailsSheet()}
+    `;
   }
 
-  return renderHomeSheet();
+  return `
+    ${renderTopBar()}
+    ${renderHomeSheet()}
+  `;
 }
 
-function renderHomeSheet() {
-  const results = state.routingResults;
+function renderTopBar() {
   const searchValue = state.draftSearch || state.activeSearch;
   const suggestions = getTopSearchSuggestions(searchValue, state.topSearchOpen);
 
@@ -1395,6 +1413,15 @@ function renderHomeSheet() {
       </div>
     </div>
     ${renderFilterModal()}
+  `;
+}
+
+function renderHomeSheet() {
+  const results = state.routingResults;
+  const searchValue = state.draftSearch || state.activeSearch;
+  const suggestions = getTopSearchSuggestions(searchValue, state.topSearchOpen);
+
+  return `
     <section class="bottom-sheet ${isSheetCollapsed() ? "is-hidden" : ""}" data-sheet>
       <div class="sheet-handle" data-sheet-handle></div>
       <div class="sheet-content">
@@ -2176,6 +2203,12 @@ function renderNav() {
 function bindEvents() {
   const topSearchInput = document.querySelector("#top-search-input");
   if (topSearchInput) {
+
+    topSearchInput.addEventListener("focus", (e) => {
+      e.target.select();
+      state.topSearchOpen = true;
+      updateTopSearchSuggestions(topSearchInput.value);
+    });
     topSearchInput.addEventListener("input", (event) => {
       state.draftSearch = event.target.value;
       state.topSearchOpen = true;
@@ -2196,11 +2229,6 @@ function bindEvents() {
       }
 
       updateTopSearchSuggestions(state.draftSearch);
-    });
-
-    topSearchInput.addEventListener("focus", () => {
-      state.topSearchOpen = true;
-      updateTopSearchSuggestions(topSearchInput.value);
     });
 
     topSearchInput.addEventListener("blur", () => {
@@ -2859,6 +2887,7 @@ function submitDestination(value) {
     state.routeOptionCatalog[option.id] = option;
   });
   state.selectedRouteOptionId = state.routingResults[0]?.id ?? null;
+  state.screen = "map"
   setSheetPreset(3);
   render();
 }
