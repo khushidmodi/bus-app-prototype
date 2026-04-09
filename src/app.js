@@ -1,7 +1,7 @@
 import { BUILDINGS, BUILDING_LOCATIONS, MAP_CALIBRATION_POINTS, REAL_MAP_CENTER, REAL_MAP_ZOOM, ROUTES, TIMETABLES, USER_LOCATION,
          TIME_WALK_TO_STOP, TIME_BUS_PER_STOP, TIME_WALK_DIRECT } from "./data.js";
 
-const sheetHeightsVh = [0, 16, 42, 74];
+const sheetHeightsVh = [0, 16, 50, 74];
 const sheetHeights = sheetHeightsVh.map((height) => `${height}vh`);
 const collapsedSheetPeekPx = 44;
 const WALK_RADIUS  = 22; // map-unit radius within which a stop is "walkable"
@@ -50,6 +50,7 @@ const state = {
     timeRange: "5-15 min",
     days: ["Mon", "Wed", "Fri"]
   },
+  alertMatchState: {},
   busProgress: Object.fromEntries(ROUTES.map((route, index) => [route.id, (index * 0.17) % 1])),
   busPauseUntil: Object.fromEntries(ROUTES.map((route) => [route.id, 0])),
   openTimetable: null,
@@ -158,6 +159,7 @@ function bindSimulation() {
       }
     });
 
+    checkConfiguredAlerts();
     updateMapOnly();
   }, 3600);
 }
@@ -1030,7 +1032,7 @@ function createStopIcon(route, isActive = false, isCurrent = false, isJourneySto
 function createPinIcon(className, label, dotClass = "") {
   return L.divIcon({
     className: `leaflet-pin-marker ${className}`,
-    html: `<div class="${dotClass}"></div><div class="leaflet-pin-label">${label}</div>`,
+    html: `<div class="${dotClass}"></div>${label ? `<div class="leaflet-pin-label">${label}</div>` : ""}`,
     iconSize: [140, 52],
     iconAnchor: [70, 52]
   });
@@ -1042,7 +1044,11 @@ function clearLeafletOverlayLayers() {
   }
 
   leafletLayerState.routeLayers.forEach((entry) => {
-    entry.base?.remove();
+    if (Array.isArray(entry.base)) {
+      entry.base.forEach(layer => layer?.remove());
+    } else {
+      entry.base?.remove();
+    }
     entry.ridden?.remove();
     entry.bus?.remove();
     entry.stops?.forEach((marker) => marker.remove());
@@ -1086,13 +1092,40 @@ function buildLeafletOverlayLayers() {
       routeLatLngs.push(routeLatLngs[0]);
     }
 
-    const base = L.polyline(routeLatLngs, {
-      color: route.color,
-      weight: dimmed ? 3 : highlighted ? 5 : 4,
-      opacity: dimmed ? 0.18 : highlighted ? 0.92 : 0.55,
-      lineCap: "round",
-      lineJoin: "round"
-    }).addTo(realMapInstance);
+    let base;
+    const journeyStep = journey?.steps.find((step) => step.type === "bus-segment" && step.route.id === route.id);
+    
+    if (journeyStep && journeyStep.stops.length > 1) {
+      // For journey routes, only show segments between consecutive ridden stops
+      const riddenSegments = [];
+      for (let i = 0; i < journeyStep.stops.length - 1; i++) {
+        const startStop = journeyStep.stops[i];
+        const endStop = journeyStep.stops[i + 1];
+        const startPoint = toLatLng(startStop);
+        const endPoint = toLatLng(endStop);
+        riddenSegments.push([[startPoint.lat, startPoint.lng], [endPoint.lat, endPoint.lng]]);
+      }
+      
+      // Create polylines for each segment
+      base = riddenSegments.map(segmentLatLngs => 
+        L.polyline(segmentLatLngs, {
+          color: route.color,
+          weight: 5,
+          opacity: 0.92,
+          lineCap: "round",
+          lineJoin: "round"
+        }).addTo(realMapInstance)
+      );
+    } else {
+      // Non-journey routes or routes with single stop - show full route
+      base = L.polyline(routeLatLngs, {
+        color: route.color,
+        weight: dimmed ? 3 : highlighted ? 5 : 4,
+        opacity: dimmed ? 0.18 : highlighted ? 0.92 : 0.55,
+        lineCap: "round",
+        lineJoin: "round"
+      }).addTo(realMapInstance);
+    }
 
     const ridden = L.polyline([], {
       color: route.color,
@@ -1103,11 +1136,13 @@ function buildLeafletOverlayLayers() {
     }).addTo(realMapInstance);
 
     const bus = L.marker(getBusLatLng(route), {
-      icon: createBusIcon(route),
-      interactive: true,
-      keyboard: false,
-      zIndexOffset: 1200
-    }).addTo(realMapInstance);
+  icon: createBusIcon(route),
+  interactive: true,
+  keyboard: false,
+  zIndexOffset: 1200,
+  opacity: dimmed ? 0.15 : 1   // dim instead of hide
+}).addTo(realMapInstance);
+
 
     bus.on("click", () => {
       openRouteDetails(route.id, state.screen);
@@ -1118,11 +1153,20 @@ function buildLeafletOverlayLayers() {
       const details = state.screen === "routeDetails" && state.selectedRouteId === route.id;
       const status = details ? getStopStatus(route, index) : null;
       const icon = createStopIcon(route, !!status && status.variant === "current", !!status && status.variant === "current", !!journey?.steps.find((step) => step.type === "bus-segment" && step.route.id === route.id && step.stops.some((journeyStop) => journeyStop.id === stop.id)));
+      const isJourneyStop = !!journey?.steps.find(step =>
+        step.type === "bus-segment" &&
+        step.route.id === route.id &&
+        step.stops.some(s => s.id === stop.id)
+      );
+
+      const dimmed = !!journey && !isJourneyStop;
+      
       const marker = L.marker([toLatLng(stop).lat, toLatLng(stop).lng], {
         icon,
         interactive: true,
         keyboard: false,
-        zIndexOffset: 1000
+        zIndexOffset: 1000,
+        opacity: dimmed ? 0.15 : 1
       }).addTo(realMapInstance);
 
       marker.on("click", () => {
@@ -1133,25 +1177,17 @@ function buildLeafletOverlayLayers() {
       return marker;
     });
 
-    const journeyStep = journey?.steps.find((step) => step.type === "bus-segment" && step.route.id === route.id);
-    if (journeyStep) {
-      const riddenLatLngs = journeyStep.stops.map((stop) => {
-        const point = toLatLng(stop);
-        return [point.lat, point.lng];
-      });
-      ridden.setLatLngs(riddenLatLngs);
-      ridden.setStyle({ opacity: 0.95, weight: 6 });
-    }
-
     routeLayers.set(route.id, { base, ridden, bus, stopMarkers });
   });
 
   const userPoint = toLatLng(USER_LOCATION);
+  const originIsCurrentLocation = !state.plannerOriginValue || state.plannerOriginValue === USER_LOCATION.label;
   const user = L.marker([userPoint.lat, userPoint.lng], {
-    icon: createPinIcon("leaflet-user-pin", "Current Location", "leaflet-user-dot"),
+    icon: createPinIcon("leaflet-user-pin", "", "leaflet-user-dot"),
     interactive: false,
     keyboard: false,
-    zIndexOffset: 900
+    zIndexOffset: 900,
+    opacity: state.selectedRouteOptionId && !originIsCurrentLocation ? 0.3 : 1
   }).addTo(realMapInstance);
 
   let origin = null;
@@ -1318,34 +1354,52 @@ function renderJourneyOverlay(journey) {
 
 function renderScreenOverlay() {
   if (state.screen === "saved") {
-    return renderSavedPage();
+    return `
+    ${renderSavedPage()}
+    `;
   }
 
   if (state.screen === "alerts") {
-    return renderAlertsPage();
+    return `
+     ${renderAlertsPage()}
+    `;
   }
 
   if (state.screen === "routes") {
-    return renderRoutesPage();
+    return `
+     ${renderTopBar()}
+     ${renderRoutesPage()}
+    `;
   }
 
   if (state.screen === "stops") {
-    return renderStopsPage();
+    return `
+     ${renderTopBar()}
+     ${renderStopsPage()}
+    `;
   }
 
   if (state.screen === "routeDetails") {
-    return renderRouteDetailsSheet();
+    return `
+     ${renderTopBar()}
+     ${renderRouteDetailsSheet()}
+     `;
   }
 
   if (state.screen === "journeyDetails") {
-    return renderJourneyDetailsSheet();
+    return `
+      ${renderTopBar()}
+      ${renderJourneyDetailsSheet()}
+    `;
   }
 
-  return renderHomeSheet();
+  return `
+    ${renderTopBar()}
+    ${renderHomeSheet()}
+  `;
 }
 
-function renderHomeSheet() {
-  const results = state.routingResults;
+function renderTopBar() {
   const searchValue = state.draftSearch || state.activeSearch;
   const suggestions = getTopSearchSuggestions(searchValue, state.topSearchOpen);
 
@@ -1357,13 +1411,26 @@ function renderHomeSheet() {
           <button class="search-submit" data-submit-top-search aria-label="Search destination">⌕</button>
         </label>
         <button class="theme-button" data-toggle-theme type="button" aria-label="Switch to ${state.theme === "dark" ? "light" : "dark"} mode"><span class="theme-icon" aria-hidden="true">${state.theme === "dark" ? "☀" : "☾"}</span></button>
-        <button class="filter-button" data-toggle-filters>☰</button>
+        <button class="filter-button" data-toggle-filters aria-label="Filter routes">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M3 4.5h18L13.5 12v6.5l-3-1.5V12L3 4.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </button>
       </div>
       <div class="top-search-suggestions ${(state.showPlanner || !state.topSearchOpen || !suggestions.length) ? "is-hidden" : ""}" data-top-suggestions>
         ${renderTopSearchSuggestionItems(suggestions)}
       </div>
     </div>
     ${renderFilterModal()}
+  `;
+}
+
+function renderHomeSheet() {
+  const results = state.routingResults;
+  const searchValue = state.draftSearch || state.activeSearch;
+  const suggestions = getTopSearchSuggestions(searchValue, state.topSearchOpen);
+
+  return `
     <section class="bottom-sheet ${isSheetCollapsed() ? "is-hidden" : ""}" data-sheet>
       <div class="sheet-handle" data-sheet-handle></div>
       <div class="sheet-content">
@@ -1453,6 +1520,11 @@ function updateTopSearchSuggestions(query) {
   listEl.classList.remove("is-hidden");
   listEl.innerHTML = renderTopSearchSuggestionItems(suggestions);
   bindTopSearchSuggestionEvents();
+}
+
+function closeTopSearchSuggestions() {
+  state.topSearchOpen = false;
+  updateTopSearchSuggestions(state.draftSearch || state.activeSearch);
 }
 
 function bindTopSearchSuggestionEvents() {
@@ -1695,10 +1767,26 @@ function renderJourneyDetailsSheet() {
             `;
           }).join("")}
         </div>
-        ${legIdx < busSegs.length - 1 ? '<div class="journey-transfer-divider">🔄 Transfer to next route</div>' : ''}
+        ${legIdx < busSegs.length - 1 ? '<div class="journey-transfer-divider">Transfer to next route</div>' : ''}
       </div>
     `;
   }).join("");
+
+  const eyebrow = busSegs.length === 0
+    ? "Journey · Walk only"
+    : busSegs.length === 1
+      ? "Journey · 1 route"
+      : `Journey · ${busSegs.length} routes`;
+
+  const walkOnlyHtml = busSegs.length === 0 ? `
+    <div class="journey-leg" style="--route:#888;">
+      <div class="journey-leg-header">
+        <div class="journey-leg-title">Walk to destination</div>
+        <div class="journey-leg-eta">${option.total} min</div>
+      </div>
+      <p class="status-copy" style="margin:6px 0 10px;">No bus service needed for this route</p>
+    </div>
+  ` : "";
 
   return `
     <section class="bottom-sheet route-details-sheet details-open ${isSheetCollapsed() ? "is-hidden" : ""}" data-sheet>
@@ -1706,13 +1794,13 @@ function renderJourneyDetailsSheet() {
       <div class="sheet-header sheet-header--sticky">
         <button class="ghost-button" data-back-map>←</button>
         <div>
-          <div class="eyebrow">Journey · ${busSegs.length} routes</div>
+          <div class="eyebrow">${eyebrow}</div>
           <h2>to ${option.destination}</h2>
         </div>
         <div class="eta-pill">${option.total} min</div>
       </div>
       <div class="sheet-content">
-        ${legsHtml}
+        ${legsHtml || walkOnlyHtml}
       </div>
     </section>
   `;
@@ -1885,7 +1973,7 @@ function renderTimetablePanel(route, timetable) {
     return `
       <div class="timetable-panel" style="--route:${route.color};">
         <div class="timetable-loop-notice">
-          <span class="timetable-loop-icon">🔄</span>
+          <span class="timetable-loop-icon"></span>
           <div>
             <div class="timetable-loop-title">Continuous Loop</div>
             <div class="timetable-loop-body">The ${route.name} runs on a continuous loop with no fixed departure schedule. Buses arrive approximately every ${route.durationLabel}.</div>
@@ -2140,6 +2228,12 @@ function renderNav() {
 function bindEvents() {
   const topSearchInput = document.querySelector("#top-search-input");
   if (topSearchInput) {
+
+    topSearchInput.addEventListener("focus", (e) => {
+      e.target.select();
+      state.topSearchOpen = true;
+      updateTopSearchSuggestions(topSearchInput.value);
+    });
     topSearchInput.addEventListener("input", (event) => {
       state.draftSearch = event.target.value;
       state.topSearchOpen = true;
@@ -2162,12 +2256,23 @@ function bindEvents() {
       updateTopSearchSuggestions(state.draftSearch);
     });
 
-    topSearchInput.addEventListener("focus", () => {
-      state.topSearchOpen = true;
-      updateTopSearchSuggestions(topSearchInput.value);
+    topSearchInput.addEventListener("blur", () => {
+      window.requestAnimationFrame(() => {
+        if (document.activeElement?.closest(".top-search-stack")) {
+          return;
+        }
+
+        closeTopSearchSuggestions();
+      });
     });
 
     topSearchInput.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeTopSearchSuggestions();
+        topSearchInput.blur();
+        return;
+      }
+
       if (event.key !== "Enter") {
         return;
       }
@@ -2317,7 +2422,7 @@ function bindEvents() {
           state.routeOptionCatalog[item.id] = item;
         });
         state.screen = "map";
-        setSheetPreset(3);
+        setSheetPreset(2);
       }
       render();
     });
@@ -2513,15 +2618,9 @@ function bindEvents() {
     const busSegs = option.segments.filter(s => s.type === "bus");
     // Favourite all bus routes in this journey
     busSegs.forEach(s => state.favoriteRoutes.add(s.routeId));
-    if (busSegs.length > 1) {
-      // Multi-leg journey: open the journey detail view
-      state.screen = "journeyDetails";
-      setSheetPreset(3);
-    } else {
-      // Single-leg: open the single route detail sheet as before
-      const routeId = busSegs[0]?.routeId ?? "r1";
-      openRouteDetails(routeId, "map");
-    }
+    // Always open the journey detail view regardless of leg count
+    state.screen = "journeyDetails";
+    setSheetPreset(2);
     render();
   });
 
@@ -2789,7 +2888,7 @@ function openRouteDetails(routeId, originScreen = state.screen) {
   state.selectedRouteId = routeId;
   state.routeDetailsBackScreen = originScreen === "routeDetails" ? "map" : originScreen;
   state.screen = "routeDetails";
-  setSheetPreset(3);
+  setSheetPreset(2);
 }
 
 function submitDestination(value) {
@@ -2807,7 +2906,8 @@ function submitDestination(value) {
     state.routeOptionCatalog[option.id] = option;
   });
   state.selectedRouteOptionId = state.routingResults[0]?.id ?? null;
-  setSheetPreset(3);
+  state.screen = "map"
+  setSheetPreset(2);
   render();
 }
 
@@ -2827,7 +2927,7 @@ function submitRouteSearch() {
     state.routeOptionCatalog[option.id] = option;
   });
   state.selectedRouteOptionId = state.routingResults[0]?.id ?? null;
-  setSheetPreset(3);
+  setSheetPreset(2);
   render();
 }
 
@@ -2866,6 +2966,84 @@ function getCurrentStopIndex(route) {
     currentStop: route.stops[currentIndex],
     nextEta: `${Math.max(2, 6 - currentIndex)} min`
   };
+}
+
+function getEtaMinutesForStop(route, stopId) {
+  const stopIndex = route.stops.findIndex((stop) => stop.id === stopId);
+  if (stopIndex === -1) {
+    return null;
+  }
+
+  const stopCount = route.stops.length;
+  const segCount = route.loop ? stopCount : stopCount - 1;
+  const scaledProgress = state.busProgress[route.id] * segCount;
+  const normalizedProgress = route.loop
+    ? scaledProgress
+    : Math.min(segCount, Math.max(0, scaledProgress));
+  const currentSegmentIndex = Math.floor(normalizedProgress) % stopCount;
+  const segmentProgress = normalizedProgress - Math.floor(normalizedProgress);
+  const toNextStopMinutes = (1 - segmentProgress) * TIME_BUS_PER_STOP;
+
+  if (stopIndex === currentSegmentIndex && nearStop(route, state.busProgress[route.id])) {
+    return 0;
+  }
+
+  if (route.loop) {
+    const stopsAhead = (stopIndex - currentSegmentIndex - 1 + stopCount) % stopCount;
+    return Math.max(0, Math.round(toNextStopMinutes + stopsAhead * TIME_BUS_PER_STOP));
+  }
+
+  if (stopIndex <= currentSegmentIndex) {
+    return 0;
+  }
+
+  const stopsAhead = stopIndex - currentSegmentIndex - 1;
+  return Math.max(0, Math.round(toNextStopMinutes + stopsAhead * TIME_BUS_PER_STOP));
+}
+
+function parseAlertTimeRange(range) {
+  const [min, max] = range.split("-").map((value) => Number.parseInt(value, 10));
+  return {
+    min: Number.isFinite(min) ? min : 0,
+    max: Number.isFinite(max) ? max : 0
+  };
+}
+
+function isAlertActiveToday(alert) {
+  const today = new Date().toLocaleDateString("en-US", { weekday: "short" });
+  return !alert.days?.length || alert.days.includes(today);
+}
+
+function checkConfiguredAlerts() {
+  state.alerts.forEach((alertConfig) => {
+    const route = ROUTES.find((item) => item.id === alertConfig.routeId);
+    const stop = route?.stops.find((item) => item.id === alertConfig.stopId);
+    if (!route || !stop || !alertConfig.enabled) {
+      state.alertMatchState[alertConfig.id] = false;
+      return;
+    }
+
+    if (!isAlertActiveToday(alertConfig)) {
+      state.alertMatchState[alertConfig.id] = false;
+      return;
+    }
+
+    const etaMinutes = getEtaMinutesForStop(route, stop.id);
+    if (etaMinutes === null) {
+      state.alertMatchState[alertConfig.id] = false;
+      return;
+    }
+
+    const { min, max } = parseAlertTimeRange(alertConfig.timeRange);
+    const matchesWindow = etaMinutes >= min && etaMinutes <= max;
+    const wasMatched = !!state.alertMatchState[alertConfig.id];
+
+    if (matchesWindow && !wasMatched) {
+      window.alert(`${route.name} is arriving at ${stop.name} in ${etaMinutes} min.`);
+    }
+
+    state.alertMatchState[alertConfig.id] = matchesWindow;
+  });
 }
 
 function getStopStatus(route, stopIndex) {

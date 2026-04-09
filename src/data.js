@@ -11,9 +11,14 @@ const STOP_NORTH_HUB   = { id: "north-hub",   name: "North Hub",    x: 71, y:  9
 export const ROUTES = [
   // ── Green Loop (G1) ─────────────────────────────────────────
   {
-    id: "r1", shortName: "G1", name: "Green Loop",
-    color: "#35d07f", glow: "rgba(53,208,127,0.35)",
-    activeHours: "7:00 AM - 11:00 PM", durationLabel: "14-18 min", loop: true,
+    id: "r1",
+    shortName: "WC",
+    name: "West Campus Loop",
+    color: "#35d07f",
+    glow: "rgba(53, 208, 127, 0.35)",
+    activeHours: "7:00 AM - 11:00 PM",
+    durationLabel: "14-18 min",
+    loop: true,
     stops: [
       { id: "r1s1", name: "Cyber Hall",               x: 18, y: 20, lat: 33.2196, lng: -87.5362 },
       { id: "r1s2", name: "West Commuter Parking",    x: 10, y: 38, lat: 33.2127, lng: -87.5516 },
@@ -26,9 +31,14 @@ export const ROUTES = [
 
   // ── Blue Loop (B2) ───────────────────────────────────────────
   {
-    id: "r2", shortName: "B2", name: "Blue Loop",
-    color: "#3ba7ff", glow: "rgba(59,167,255,0.35)",
-    activeHours: "7:30 AM - 10:30 PM", durationLabel: "16-20 min", loop: true,
+    id: "r2",
+    shortName: "EC",
+    name: "East Campus Loop",
+    color: "#3ba7ff",
+    glow: "rgba(59, 167, 255, 0.35)",
+    activeHours: "7:30 AM - 10:30 PM",
+    durationLabel: "16-20 min",
+    loop: true,
     stops: [
       STOP_NORTH_HUB,
       { id: "r2s2", name: "Welcome Center",           x: 58, y: 22, lat: 33.2160, lng: -87.5383 },
@@ -45,9 +55,14 @@ export const ROUTES = [
 
   // ── Red Line (R9) ────────────────────────────────────────────
   {
-    id: "r5", shortName: "R9", name: "Red Line",
-    color: "#ff5f6d", glow: "rgba(255,95,109,0.35)",
-    activeHours: "6:30 AM - 12:00 AM", durationLabel: "18-24 min", loop: true,
+    id: "r5",
+    shortName: "RL",
+    name: "Residential Loop",
+    color: "#ff5f6d",
+    glow: "rgba(255, 95, 109, 0.35)",
+    activeHours: "6:30 AM - 12:00 AM",
+    durationLabel: "18-24 min",
+    loop: true,
     stops: [
       STOP_SOUTH_HUB,
       { id: "r5s6", name: "Law School",               x: 76, y: 78, lat: 33.2039, lng: -87.5354 },
@@ -64,9 +79,14 @@ export const ROUTES = [
 
   // ── Sunset Express (S7) ──────────────────────────────────────
   {
-    id: "r3", shortName: "S7", name: "Sunset Express",
-    color: "#ff8a3d", glow: "rgba(255,138,61,0.35)",
-    activeHours: "8:00 AM - 9:30 PM", durationLabel: "10-14 min", loop: true,
+    id: "r3",
+    shortName: "NC",
+    name: "North Campus Loop",
+    color: "#ff8a3d",
+    glow: "rgba(255, 138, 61, 0.35)",
+    activeHours: "8:00 AM - 9:30 PM",
+    durationLabel: "10-14 min",
+    loop: true,
     stops: [
       { id: "r3s1", name: "Honors Hall",              x: 30, y: 16, lat: 33.2102, lng: -87.5440 },
       { id: "r3s2", name: "Russell Hall",             x: 46, y: 10, lat: 33.2096, lng: -87.5424 },
@@ -79,9 +99,14 @@ export const ROUTES = [
 
   // ── Purple Connector (P4) ────────────────────────────────────
   {
-    id: "r4", shortName: "P4", name: "Purple Connector",
-    color: "#b86dff", glow: "rgba(184,109,255,0.35)",
-    activeHours: "7:00 AM - 8:00 PM", durationLabel: "16-22 min", loop: true,
+    id: "r4",
+    shortName: "CL",
+    name: "Commuter Loop",
+    color: "#b86dff",
+    glow: "rgba(184, 109, 255, 0.35)",
+    activeHours: "7:00 AM - 8:00 PM",
+    durationLabel: "16-22 min",
+    loop: true,
     stops: [
       { id: "r4s1", name: "Faculty Lot",                     x:  7, y: 55, lat: 33.2120, lng: -87.5570 },
       { id: "r4s2", name: "West Commuter Parking",           x:  9, y: 65, lat: 33.2085, lng: -87.5565 },
