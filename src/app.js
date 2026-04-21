@@ -5,6 +5,13 @@ const sheetHeightsVh = [0, 16, 50, 74];
 const sheetHeights = sheetHeightsVh.map((height) => `${height}vh`);
 const collapsedSheetPeekPx = 44;
 const WALK_RADIUS  = 22; // map-unit radius within which a stop is "walkable"
+const ALERT_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+const DEFAULT_ALERT_FORM = {
+  routeId: "r1",
+  stopId: "r1s1",
+  timeRange: "5-15 min",
+  days: [...ALERT_WEEKDAYS]
+};
 const initialOptionCatalog = Object.fromEntries(
   generateRouteOptions("Student Recreation Center").map((option) => [option.id, option])
 );
@@ -39,18 +46,13 @@ const state = {
       routeId: "r5",
       stopId: "r5s2",
       timeRange: "0-5 min",
-      days: ["Mon", "Wed", "Fri"],
+      days: [...ALERT_WEEKDAYS],
       enabled: true,
       message: "Red Line arriving at Commons in 0 minutes"
     }
   ],
   alertsView: "list",
-  alertForm: {
-    routeId: "r1",
-    stopId: "r1s1",
-    timeRange: "5-15 min",
-    days: ["Mon", "Wed", "Fri"]
-  },
+  alertForm: { ...DEFAULT_ALERT_FORM, days: [...ALERT_WEEKDAYS] },
   alertMatchState: {},
   busProgress: Object.fromEntries(ROUTES.map((route, index) => [route.id, (index * 0.17) % 1])),
   busPauseUntil: Object.fromEntries(ROUTES.map((route) => [route.id, 0])),
@@ -68,10 +70,26 @@ const campusProjection = buildCampusProjection(MAP_CALIBRATION_POINTS);
 let leafletLayerState = null;
 
 function init() {
+  normalizeDefaultAlertWeekdays();
   attachGlobalStyles();
   applyTheme();
   bindSimulation();
   render();
+}
+
+function resetAlertFormToDefaults() {
+  state.alertForm = { ...DEFAULT_ALERT_FORM, days: [...ALERT_WEEKDAYS] };
+}
+
+function normalizeDefaultAlertWeekdays() {
+  state.alerts = state.alerts.map((alert) => {
+    const isSeededResidentialAlert = alert.id === "a1" || (alert.routeId === "r5" && alert.stopId === "r5s2");
+    if (!isSeededResidentialAlert) {
+      return alert;
+    }
+
+    return { ...alert, days: [...ALERT_WEEKDAYS] };
+  });
 }
 
 function getInitialTheme() {
@@ -2764,6 +2782,7 @@ function bindEvents() {
   });
 
   document.querySelector("[data-open-alert-create]")?.addEventListener("click", () => {
+    resetAlertFormToDefaults();
     state.alertsView = "create";
     render();
   });
