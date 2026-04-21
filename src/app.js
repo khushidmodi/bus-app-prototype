@@ -58,7 +58,8 @@ const state = {
   busPauseUntil: Object.fromEntries(ROUTES.map((route) => [route.id, 0])),
   openTimetable: null,
   routeDetailsBackScreen: "map",
-  pendingUnsaveTarget: null
+  pendingUnsaveTarget: null,
+  pendingAlertDeleteId: null
 };
 
 const app = document.querySelector("#app");
@@ -811,6 +812,7 @@ function render() {
         ${renderToastLayer()}
         ${renderNav()}
         ${renderRouteUnsaveModal()}
+        ${renderAlertDeleteModal()}
       </div>
     </div>
   `;
@@ -2311,6 +2313,28 @@ function renderNav() {
   `;
 }
 
+function renderAlertDeleteModal() {
+  if (!state.pendingAlertDeleteId) {
+    return "";
+  }
+
+  const alertToDelete = state.alerts.find((alert) => alert.id === state.pendingAlertDeleteId);
+  const route = ROUTES.find((item) => item.id === alertToDelete?.routeId);
+  const title = route?.name ?? "this alert";
+
+  return `
+    <div class="route-unsave-backdrop" data-alert-delete-backdrop></div>
+    <div class="route-unsave-modal" role="dialog" aria-modal="true" aria-label="Confirm delete alert">
+      <div class="route-unsave-title">Delete alert?</div>
+      <div class="route-unsave-copy">Are you sure you want to delete ${title}?</div>
+      <div class="route-unsave-actions">
+        <button class="ghost-action-button" data-cancel-alert-delete>Cancel</button>
+        <button class="ghost-action-button danger-button" data-confirm-alert-delete>Delete</button>
+      </div>
+    </div>
+  `;
+}
+
 function bindEvents() {
   const topSearchInput = document.querySelector("#top-search-input");
   if (topSearchInput) {
@@ -2859,9 +2883,27 @@ function bindEvents() {
 
   document.querySelectorAll("[data-delete-alert]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.alerts = state.alerts.filter((alert) => alert.id !== button.dataset.deleteAlert);
+      state.pendingAlertDeleteId = button.dataset.deleteAlert;
       render();
     });
+  });
+
+  document.querySelector("[data-alert-delete-backdrop]")?.addEventListener("click", () => {
+    state.pendingAlertDeleteId = null;
+    render();
+  });
+
+  document.querySelector("[data-cancel-alert-delete]")?.addEventListener("click", () => {
+    state.pendingAlertDeleteId = null;
+    render();
+  });
+
+  document.querySelector("[data-confirm-alert-delete]")?.addEventListener("click", () => {
+    if (state.pendingAlertDeleteId) {
+      state.alerts = state.alerts.filter((alert) => alert.id !== state.pendingAlertDeleteId);
+    }
+    state.pendingAlertDeleteId = null;
+    render();
   });
 
   // Stops page search
